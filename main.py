@@ -5,9 +5,9 @@ from datetime import datetime
 from time import sleep
 import xarray as xr
 
-sample_interval_s = 1
+sample_interval_s = 0.2
 fps_expected = 40
-n_samples = 5
+n_samples = 1440
 
 lib = ctypes.WinDLL("x64/libirimager")
 
@@ -108,14 +108,13 @@ res = usb_init('config.xml')
 
 if res != -1:
     raise ValueError("Could not initialise USB connection")
-sleep(1)
+sleep(0.5)
 sn = get_serial()
 set_shutter_mode(0)
 trigger_shutter_flag()
-sleep(1)
+sleep(0.5)
 width, height = get_thermal_image_size()
 time_timeseries = np.empty(n_samples)
-image_mean_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
 image_median_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
 image_min_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
 image_max_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
@@ -139,7 +138,6 @@ for j in range(0, n_samples):
     end = datetime.now()
     dtime = end - start
     fps = n_images / dtime.total_seconds()
-    image_mean_timeseries[j, :, :] = np.mean(images_raw, axis=0)
     image_median_timeseries[j, :, :] = np.median(images_raw, axis=0)
     image_min_timeseries[j, :, :] = np.min(images_raw, axis=0)
     image_max_timeseries[j, :, :] = np.max(images_raw, axis=0)
@@ -158,7 +156,6 @@ y = np.flip(np.arange(0, 120))
 
 ds = xr.Dataset(
     data_vars=dict(
-        t_b_mean=(["time", "y", "x"], image_mean_timeseries),
         t_b_median=(["time", "y", "x"], image_median_timeseries),
         t_b_min=(["time", "y", "x"], image_min_timeseries),
         t_b_max=(["time", "y", "x"], image_max_timeseries),
@@ -183,7 +180,6 @@ ds = xr.Dataset(
 ds.to_netcdf("C:/Users/willm/Desktop/a1.nc", 
              encoding={
                  'time': {'dtype': 'i4'}, 
-                 't_b_mean': {'zlib': True, "complevel": 7},
                  't_b_median': {'zlib': True, "complevel": 7},
                  't_b_min': {'zlib': True, "complevel": 7},
                  't_b_max': {'zlib': True, "complevel": 7},
