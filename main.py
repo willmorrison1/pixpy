@@ -1,13 +1,47 @@
 import ctypes
 import numpy as np
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import sleep
 import xarray as xr
+from dataclasses import dataclass, field
+from typing import List
+from pandas import to_datetime
 
-sample_interval_s = 0.2
+@dataclass(frozen=True)
+class SnapshotScheduleParameters:
+    file_interval: timedelta = timedelta(minutes=5)
+    timerange: (datetime, datetime) = (datetime.utcnow(), datetime.utcnow() + timedelta(days=365*10))
+    interval_stats: List[str] = field(default_factory=list)
+    interval_length: timedelta = timedelta(seconds=5)
+    repeat_any: timedelta = timedelta(minutes=1)
+    repeat_any_offset: timedelta = timedelta(seconds=0)
+    
+    if repeat_any < interval_length:
+        raise ValueError("repeat_any < interval_length")
+    if timerange[1] < timerange[0]:
+        raise ValueError("end time is before start time")
+    #todo: further validation
+    
+class SnapshotSchedule(SnapshotScheduleParameters):
+    def next_snapshot(self) -> datetime:
+        time_now_offset = datetime.utcnow() + (self.repeat_any / 2)
+        return to_datetime(time_now_offset).round(self.repeat_any)
+    
+    def next_interval_start(self) -> datetime:
+        return self.next_snapshot() - self.interval_length
+    
+    def next_interval_end(self) -> datetime:
+        return self.next_interval_start() + self.interval_length
+        
+a = SnapshotSchedule()
+
+print(a.next_snapshot())
+print(a.next_interval_start())
+
+sample_interval_s = 10
 fps_expected = 40
-n_samples = 1440
+n_samples = 60
 
 lib = ctypes.WinDLL("x64/libirimager")
 
@@ -47,7 +81,7 @@ def get_palette_image(width: int, height: int) -> np.ndarray:
 def terminate() -> int:
     return lib.evo_irimager_terminate()
 
-def get_serial():
+def get_serial() -> int:
     s = ctypes.c_int()
     _ = lib.evo_irimager_get_serial(ctypes.byref(s))
     return s.value
@@ -108,6 +142,7 @@ res = usb_init('config.xml')
 
 if res != -1:
     raise ValueError("Could not initialise USB connection")
+
 sleep(0.5)
 sn = get_serial()
 set_shutter_mode(0)
