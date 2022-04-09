@@ -7,7 +7,6 @@ import time
 
 lib = ctypes.WinDLL("x64/libirimager")
 
-
 def usb_init(xml_config: str, formats_def: str = None, log_file: str = None) -> int:
     return lib.evo_irimager_usb_init(xml_config.encode(), None if formats_def is None else formats_def.encode(), None if log_file is None else log_file.encode())
 
