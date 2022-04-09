@@ -176,7 +176,7 @@ def write_file():
     nsamples_timeseries = np.empty(n_samples, dtype=int)
     
     print(str(n_samples))
-    while datetime.utcnow() < (file_end_raw - sschedule.interval_length):
+    while datetime.utcnow() < (file_end_raw - sschedule.repeat_any):
         wait_time = sschedule.next_interval_start() - datetime.utcnow()
         sleep(wait_time.total_seconds())
         
@@ -242,9 +242,9 @@ def write_file():
 
 while True:
     print(datetime.utcnow())
-    next_run = sschedule.next_interval_start()
-    time_until_next_run = next_run - datetime.utcnow()
-    if time_until_next_run < (sschedule.interval_length):
-        sleep((time_until_next_run - (sschedule.interval_length / 2)).total_seconds())
+    next_interval_start = sschedule.next_interval_start()
+    time_until_next_interval_start = next_interval_start - datetime.utcnow()
+    if time_until_next_interval_start < (sschedule.interval_length):
+        sleep((time_until_next_interval_start - (sschedule.interval_length / 2)).total_seconds())
         write_file()
     
