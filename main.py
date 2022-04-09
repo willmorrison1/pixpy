@@ -1,9 +1,13 @@
 import ctypes
 import numpy as np
-from matplotlib import pyplot as plt
 from enum import Enum
 from datetime import datetime
-import time
+from time import sleep
+import xarray as xr
+
+sample_interval_s = 1
+fps_expected = 40
+n_samples = 5
 
 lib = ctypes.WinDLL("x64/libirimager")
 
@@ -101,46 +105,89 @@ def get_thermal_image_metadata(width: int, height: int) -> (np.ndarray, EvoIRFra
     return data, meta
 
 res = usb_init('config.xml')
-sample_interval_s = 5
-fps_expected = 40
 
 if res != -1:
     raise ValueError("Could not initialise USB connection")
-time.sleep(1)
-print(get_serial())
-set_shutter_mode(1)
+sleep(1)
+sn = get_serial()
+set_shutter_mode(0)
 trigger_shutter_flag()
-time.sleep(1)
+sleep(1)
 width, height = get_thermal_image_size()
-n_images = sample_interval_s * fps_expected
-raw_data = np.empty((height, width, n_images), dtype=np.uint16)
-image, meta = get_thermal_image_metadata(width, height)
-start = datetime.now()
-for i in range(0, n_images):
-    image = get_thermal_image(width, height)
-    raw_data[:, :, i] = image
-end = datetime.now()
-dtime = end - start
-print(dtime)
-fps_actual = n_images / dtime.total_seconds()
-print(fps_actual)
+time_timeseries = np.empty(n_samples)
+image_mean_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
+image_median_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
+image_min_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
+image_max_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
+image_std_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
+tbox_timeseries = np.empty(n_samples, dtype=float)
+tchip_timeseries = np.empty(n_samples, dtype=float)
+flagstate_timeseries = np.empty(n_samples, dtype=int)
+counter_timeseries = np.empty(n_samples, dtype=np.longlong)
+counterHW_timeseries = np.empty(n_samples, dtype=np.longlong)
+fps_timeseries = np.empty(n_samples, dtype=float)
+nsamples_timeseries = np.empty(n_samples, dtype=int)
 
-raw_data = (raw_data - 1000) / 10
-fig, ax = plt.subplots()
-shw = ax.imshow(np.std(raw_data, axis=2))
-bar = plt.colorbar(shw)
-plt.show()
+for j in range(0, n_samples):
+    n_images = int((sample_interval_s * fps_expected) + 0.5)
+    images_raw = np.empty((n_images, height, width), dtype=np.uint16)
+    start = datetime.now()
+    for i in range(0, n_images):
+        image = get_thermal_image(width, height)
+        images_raw[i, :, :] = image
+    image, meta = get_thermal_image_metadata(width, height)
+    end = datetime.now()
+    dtime = end - start
+    fps = n_images / dtime.total_seconds()
+    image_mean_timeseries[j, :, :] = np.mean(images_raw, axis=0)
+    image_median_timeseries[j, :, :] = np.median(images_raw, axis=0)
+    image_min_timeseries[j, :, :] = np.min(images_raw, axis=0)
+    image_max_timeseries[j, :, :] = np.max(images_raw, axis=0)
+    image_std_timeseries[j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
+    time_timeseries[j] = end.timestamp()
+    tbox_timeseries[j] = meta.tempBox
+    tchip_timeseries[j] = meta.tempChip
+    flagstate_timeseries[j] = meta.flagState
+    counter_timeseries[j] = meta.counter
+    counterHW_timeseries[j] = meta.counterHW
+    fps_timeseries[j] = fps
+    nsamples_timeseries[j] = n_images
+    
+x = np.arange(0, 160)
+y = np.flip(np.arange(0, 120))
 
-fig, ax = plt.subplots()
-shw = ax.imshow(np.mean(raw_data, axis=2))
-bar = plt.colorbar(shw)
-plt.show()
+ds = xr.Dataset(
+    data_vars=dict(
+        t_b_mean=(["time", "y", "x"], image_mean_timeseries),
+        t_b_median=(["time", "y", "x"], image_median_timeseries),
+        t_b_min=(["time", "y", "x"], image_min_timeseries),
+        t_b_max=(["time", "y", "x"], image_max_timeseries),
+        t_b_std=(["time", "y", "x"], image_std_timeseries),
+        t_box=(["time"], tbox_timeseries),
+        t_chip=(["time"], tchip_timeseries),
+        flag_state=(["time"], flagstate_timeseries),
+        counter=(["time"], counter_timeseries),
+        counterHW=(["time"], counterHW_timeseries),
+        fps=(["time"], fps_timeseries),
+        nsamples=(["time"], nsamples_timeseries),
+    ),
+    coords=dict(
+        x=x,
+        y=y,        
+        time=[datetime.utcfromtimestamp(i) for i in time_timeseries],
+    ),
+    attrs=dict(description="pixpy",
+               serial=sn),
+)
 
-fig, ax = plt.subplots()
-shw = ax.imshow(np.max(raw_data, axis=2) - np.min(raw_data, axis=2))
-bar = plt.colorbar(shw)
-plt.show()
+ds.to_netcdf("C:/Users/willm/Desktop/a1.nc", 
+             encoding={
+                 'time': {'dtype': 'i4'}, 
+                 't_b_mean': {'zlib': True, "complevel": 7},
+                 't_b_median': {'zlib': True, "complevel": 7},
+                 't_b_min': {'zlib': True, "complevel": 7},
+                 't_b_max': {'zlib': True, "complevel": 7},
+                 't_b_std': {'zlib': True, "complevel": 7},
+                 'nsamples': {'zlib': True, "complevel": 7},
+                 })
 
-# res = terminate()
-# if res != 0:
-#     raise ValueError("USB connection did not terminate as expected")
