@@ -6,7 +6,7 @@ from time import sleep
 import xarray as xr
 from dataclasses import dataclass, field
 from typing import List
-from pandas import to_datetime
+from pandas import to_datetime, Timestamp
 
 @dataclass(frozen=True)
 class SnapshotScheduleParameters:
@@ -24,7 +24,7 @@ class SnapshotScheduleParameters:
     #todo: further validation
     
 class SnapshotSchedule(SnapshotScheduleParameters):
-    def next_snapshot(self) -> datetime:
+    def next_snapshot(self) -> Timestamp:
         time_now_offset = datetime.utcnow() + (self.repeat_any / 2)
         return to_datetime(time_now_offset).round(self.repeat_any)
     
@@ -33,11 +33,17 @@ class SnapshotSchedule(SnapshotScheduleParameters):
     
     def next_interval_end(self) -> datetime:
         return self.next_interval_start() + self.interval_length
+    
+    def current_file_time_end(self) -> Timestamp:
+        time_now_offset = datetime.utcnow() + (self.file_interval / 2)
+        return to_datetime(time_now_offset).round(self.file_interval)
+    
+    def n_interval_timesteps(self) -> int:
+        next_snapshot = self.next_snapshot()
+        final_snapshot = self.current_file_time_end()
+        return (final_snapshot - next_snapshot + self.repeat_any) / self.repeat_any
         
-a = SnapshotSchedule()
-
-print(a.next_snapshot())
-print(a.next_interval_start())
+sschedule = SnapshotSchedule()
 
 sample_interval_s = 10
 fps_expected = 40
@@ -149,6 +155,8 @@ set_shutter_mode(0)
 trigger_shutter_flag()
 sleep(0.5)
 width, height = get_thermal_image_size()
+
+
 time_timeseries = np.empty(n_samples)
 image_median_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
 image_min_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
