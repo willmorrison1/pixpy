@@ -180,7 +180,7 @@ def write_file():
     sleep(wait_time.total_seconds())
         
     for j in range(0, n_interval_timesteps): 
-        print(f'started n_interval_timestep {j} at {datetime.utcnow()}')
+        print(f'started n_interval_timestep {j} / {n_interval_timesteps} at {datetime.utcnow()}')
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
         start = datetime.now()
         for i in range(0, n_images):
