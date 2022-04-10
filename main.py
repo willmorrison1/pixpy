@@ -10,7 +10,7 @@ from pandas import to_datetime, Timestamp
 
 @dataclass(frozen=True)
 class SnapshotScheduleParameters:
-    file_interval: timedelta = timedelta(minutes=1)
+    file_interval: timedelta = timedelta(seconds=30)
     timerange: (datetime, datetime) = (datetime.utcnow(), datetime.utcnow() + timedelta(days=365*10))
     interval_stats: List[str] = field(default_factory=list)
     interval_length: timedelta = timedelta(seconds=5)
@@ -46,7 +46,7 @@ class SnapshotSchedule(SnapshotScheduleParameters):
         
 sschedule = SnapshotSchedule()
 
-fps_expected = 40
+fps_expected = 5
 
 lib = ctypes.WinDLL("x64/libirimager")
 
@@ -157,52 +157,56 @@ sleep(0.5)
 
 def write_file():
     width, height = get_thermal_image_size()
-    n_samples = sschedule.n_interval_timesteps()
-    sample_interval_s = sschedule.interval_length.total_seconds()
+    n_interval_timesteps = sschedule.n_interval_timesteps()
+    interval_length_s = sschedule.interval_length.total_seconds()
     file_end_raw = sschedule.current_file_time_end()
     file_name = str(file_end_raw).replace("-", "").replace(":", "").replace(" ", "")
     
-    time_timeseries = np.empty(n_samples)
-    image_median_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
-    image_min_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
-    image_max_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
-    image_std_timeseries = np.empty((n_samples, height, width), dtype=np.uint16)
-    tbox_timeseries = np.empty(n_samples, dtype=float)
-    tchip_timeseries = np.empty(n_samples, dtype=float)
-    flagstate_timeseries = np.empty(n_samples, dtype=int)
-    counter_timeseries = np.empty(n_samples, dtype=np.longlong)
-    counterHW_timeseries = np.empty(n_samples, dtype=np.longlong)
-    fps_timeseries = np.empty(n_samples, dtype=float)
-    nsamples_timeseries = np.empty(n_samples, dtype=int)
+    time_timeseries = np.empty(n_interval_timesteps)
+    image_median_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
+    image_min_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
+    image_max_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
+    image_std_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
+    tbox_timeseries = np.empty(n_interval_timesteps, dtype=float)
+    tchip_timeseries = np.empty(n_interval_timesteps, dtype=float)
+    flagstate_timeseries = np.empty(n_interval_timesteps, dtype=int)
+    counter_timeseries = np.empty(n_interval_timesteps, dtype=np.longlong)
+    counterHW_timeseries = np.empty(n_interval_timesteps, dtype=np.longlong)
+    fps_timeseries = np.empty(n_interval_timesteps, dtype=float)
+    nsamples_timeseries = np.empty(n_interval_timesteps, dtype=int)
+    n_images = int((interval_length_s * fps_expected) + 0.5)
     
-    print(str(n_samples))
-    while datetime.utcnow() < (file_end_raw - sschedule.repeat_any):
-        wait_time = sschedule.next_interval_start() - datetime.utcnow()
-        sleep(wait_time.total_seconds())
+    wait_time = sschedule.next_interval_start() - datetime.utcnow()
+    sleep(wait_time.total_seconds())
         
-        for j in range(0, n_samples):
-            n_images = int((sample_interval_s * fps_expected) + 0.5)
-            images_raw = np.empty((n_images, height, width), dtype=np.uint16)
-            start = datetime.now()
-            for i in range(0, n_images):
-                image = get_thermal_image(width, height)
-                images_raw[i, :, :] = image
+    for j in range(0, n_interval_timesteps): 
+        print(f'started n_interval_timestep {j} at {datetime.utcnow()}')
+        images_raw = np.empty((n_images, height, width), dtype=np.uint16)
+        start = datetime.now()
+        for i in range(0, n_images):
             image, meta = get_thermal_image_metadata(width, height)
-            end = datetime.now()
-            dtime = end - start
-            fps = n_images / dtime.total_seconds()
-            image_median_timeseries[j, :, :] = np.median(images_raw, axis=0)
-            image_min_timeseries[j, :, :] = np.min(images_raw, axis=0)
-            image_max_timeseries[j, :, :] = np.max(images_raw, axis=0)
-            image_std_timeseries[j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
-            time_timeseries[j] = end.timestamp()
-            tbox_timeseries[j] = meta.tempBox
-            tchip_timeseries[j] = meta.tempChip
-            flagstate_timeseries[j] = meta.flagState
-            counter_timeseries[j] = meta.counter
-            counterHW_timeseries[j] = meta.counterHW
-            fps_timeseries[j] = fps
-            nsamples_timeseries[j] = n_images
+            images_raw[i, :, :] = image
+            print(f'got image {i} / {n_images} at {datetime.utcnow()}')
+        end = datetime.now()
+        print(f'interval has timestamp {end}')
+        dtime = end - start
+        fps = n_images / dtime.total_seconds()
+        image_median_timeseries[j, :, :] = np.median(images_raw, axis=0)
+        image_min_timeseries[j, :, :] = np.min(images_raw, axis=0)
+        image_max_timeseries[j, :, :] = np.max(images_raw, axis=0)
+        image_std_timeseries[j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
+        time_timeseries[j] = end.timestamp()
+        tbox_timeseries[j] = meta.tempBox
+        tchip_timeseries[j] = meta.tempChip
+        flagstate_timeseries[j] = meta.flagState
+        counter_timeseries[j] = meta.counter
+        counterHW_timeseries[j] = meta.counterHW
+        fps_timeseries[j] = fps
+        nsamples_timeseries[j] = n_images
+        if j != n_interval_timesteps:
+            next_interval = (sschedule.next_interval_start() - datetime.utcnow()).total_seconds()
+            print(next_interval)
+            sleep(next_interval)
             
         x = np.arange(0, 160)
         y = np.flip(np.arange(0, 120))
@@ -229,7 +233,6 @@ def write_file():
             attrs=dict(description="pixpy",
                        serial=sn),
         )
-        
         ds.to_netcdf(f"C:/Users/willm/Desktop/{file_name}.nc", 
                      encoding={
                          'time': {'dtype': 'i4'}, 
@@ -241,10 +244,6 @@ def write_file():
                          })
 
 while True:
-    print(datetime.utcnow())
-    next_interval_start = sschedule.next_interval_start()
-    time_until_next_interval_start = next_interval_start - datetime.utcnow()
-    if time_until_next_interval_start < (sschedule.interval_length):
-        sleep((time_until_next_interval_start - (sschedule.interval_length / 2)).total_seconds())
-        write_file()
+    
+    write_file()
     

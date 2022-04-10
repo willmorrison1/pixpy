@@ -22,7 +22,7 @@
   </temperature>
   <optics_text></optics_text>
   -->
-  <framerate>40</framerate>             <!-- only scaled down frame rate, maximum framerate depends on the chosen <videoformatindex> -->
+  <framerate>5</framerate>             <!-- only scaled down frame rate, maximum framerate depends on the chosen <videoformatindex> -->
   <bispectral>0</bispectral>              <!-- 0=only thermal sensor, 1=bispectral technology (only PI200/PI230) -->
   <autoflag>
     <enable>0</enable> <!-- 0=Off, 1=On; Enables automatic flag cycle depending on internal camera temperature or time-->
