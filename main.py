@@ -7,6 +7,8 @@ import xarray as xr
 from dataclasses import dataclass, field
 from typing import List
 from pandas import to_datetime, Timestamp
+from os import name as os_name
+
 
 @dataclass(frozen=True)
 class SnapshotScheduleParameters:
@@ -47,8 +49,12 @@ class SnapshotSchedule(SnapshotScheduleParameters):
 sschedule = SnapshotSchedule()
 
 fps_expected = 5
-
-lib = ctypes.WinDLL("x64/libirimager")
+if os_name == 'nt':
+        #windows:
+        lib = ctypes.CDLL("x64/libirimager.dll")
+else:
+        #linux:
+        lib = ctypes.cdll.LoadLibrary(ctypes.util.find_library("irdirectsdk"))
 
 def usb_init(xml_config: str, formats_def: str = None, log_file: str = None) -> int:
     return lib.evo_irimager_usb_init(xml_config.encode(), None if formats_def is None else formats_def.encode(), None if log_file is None else log_file.encode())
