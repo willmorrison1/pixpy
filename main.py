@@ -17,7 +17,7 @@ class SnapshotScheduleParameters:
     timerange: (datetime, datetime) = (datetime.utcnow(), datetime.utcnow() + timedelta(days=365*10))
     interval_stats: List[str] = field(default_factory=list)
     interval_length: timedelta = timedelta(seconds=5)
-    repeat_any: timedelta = timedelta(seconds=10)
+    repeat_any: timedelta = timedelta(seconds=30)
     #repeat_any_offset: timedelta = timedelta(seconds=0) # todo
     
     if repeat_any < interval_length:
@@ -41,7 +41,7 @@ class SnapshotSchedule(SnapshotScheduleParameters):
         time_now_offset = datetime.utcnow() + (self.file_interval / 2)
         return to_datetime(time_now_offset).round(self.file_interval)
     
-    def n_interval_timesteps(self) -> int:
+    def interval_timesteps_remaining(self) -> int:
         final_snapshot = self.current_file_time_end()
         n_intervals = int((final_snapshot - datetime.utcnow() + self.interval_length) / self.repeat_any)
         return n_intervals
@@ -174,31 +174,34 @@ sleep(0.5)
 
 def write_file():
     width, height = get_thermal_image_size()
-    n_interval_timesteps = sschedule.n_interval_timesteps()
+    interval_timesteps_remaining = sschedule.interval_timesteps_remaining()
     print(datetime.now())
-    print(n_interval_timesteps)
-    if n_interval_timesteps == 0:
-        return None
+    print(interval_timesteps_remaining)
     interval_length_s = sschedule.interval_length.total_seconds()
     file_end_raw = sschedule.current_file_time_end()
     file_name = str(file_end_raw).replace("-", "").replace(":", "").replace(" ", "")
     
-    time_timeseries = np.empty(n_interval_timesteps)
-    image_median_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
-    image_min_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
-    image_max_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
-    image_std_timeseries = np.empty((n_interval_timesteps, height, width), dtype=np.uint16)
-    tbox_timeseries = np.empty(n_interval_timesteps, dtype=float)
-    tchip_timeseries = np.empty(n_interval_timesteps, dtype=float)
-    flagstate_timeseries = np.empty(n_interval_timesteps, dtype=int)
-    counter_timeseries = np.empty(n_interval_timesteps, dtype=np.longlong)
-    counterHW_timeseries = np.empty(n_interval_timesteps, dtype=np.longlong)
-    fps_timeseries = np.empty(n_interval_timesteps, dtype=float)
-    nsamples_timeseries = np.empty(n_interval_timesteps, dtype=int)
+    time_timeseries = np.empty(interval_timesteps_remaining)
+    image_median_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
+    image_min_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
+    image_max_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
+    image_std_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
+    tbox_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
+    tchip_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
+    flagstate_timeseries = np.empty(interval_timesteps_remaining, dtype=int)
+    counter_timeseries = np.empty(interval_timesteps_remaining, dtype=np.longlong)
+    counterHW_timeseries = np.empty(interval_timesteps_remaining, dtype=np.longlong)
+    fps_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
+    nsamples_timeseries = np.empty(interval_timesteps_remaining, dtype=int)
     n_images = int((interval_length_s * fps_expected) + 0.5)
     
-    for j in range(0, n_interval_timesteps): 
-        print(f'started n_interval_timestep {j} / {n_interval_timesteps} at {datetime.utcnow()}')
+    for j in range(0, interval_timesteps_remaining):
+        if j == 0: #start off on the right timestep. todo: tidy
+            time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
+            while time_until_next_interval.total_seconds() < 0:
+                sleep_time = sschedule.current_interval_start() - datetime.utcnow()
+            sleep(sleep_time.total_seconds())
+        print(f'started n_interval_timestep {j} / {interval_timesteps_remaining} at {datetime.utcnow()}')
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
         for i in range(0, n_images):
@@ -221,18 +224,17 @@ def write_file():
         counterHW_timeseries[j] = meta.counterHW
         fps_timeseries[j] = fps
         nsamples_timeseries[j] = n_images
-        if j != (n_interval_timesteps - 1):
+        if j != (interval_timesteps_remaining - 1):
             next_interval_time = interval_start_time + sschedule.repeat_any
             current_time = datetime.utcnow()
             wait_time_until_next_interval_s = (next_interval_time - 
                                                current_time).total_seconds()
             print(f'Time until next interval: {wait_time_until_next_interval_s}')
             if wait_time_until_next_interval_s < 0:
-                print("Next interval start time missed. Slow scanning down.")
+                print("Next interval start time missed. Slow the sampling rate and/or fps.")
                 wait_time_until_next_interval_s = 0
             sleep(wait_time_until_next_interval_s)
         else:
-            d1 = datetime.utcnow()
             x = np.arange(0, 160)
             y = np.flip(np.arange(0, 120))
             
