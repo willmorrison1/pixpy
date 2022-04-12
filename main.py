@@ -17,8 +17,8 @@ class SnapshotScheduleParameters:
     repeat_any: timedelta = timedelta(seconds=60)
     #repeat_any_offset: timedelta = timedelta(seconds=0) # todo
     
-    if repeat_any < interval_length:
-        raise ValueError("repeat_any < interval_length")
+    if repeat_any <= interval_length:
+        raise ValueError("repeat_any <= interval_length")
     if timerange[1] < timerange[0]:
         raise ValueError("end time is before start time")
     #todo: further validation
