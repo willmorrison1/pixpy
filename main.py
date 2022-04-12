@@ -221,8 +221,6 @@ def write_file():
         counterHW_timeseries[j] = meta.counterHW
         fps_timeseries[j] = fps
         nsamples_timeseries[j] = n_images
-        print(j)
-        print(n_interval_timesteps)
         if j != (n_interval_timesteps - 1):
             next_interval_time = interval_start_time + sschedule.repeat_any
             current_time = datetime.utcnow()
