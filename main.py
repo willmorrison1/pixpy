@@ -5,19 +5,16 @@ from enum import Enum
 from datetime import datetime, timedelta
 from time import sleep
 import xarray as xr
-from dataclasses import dataclass, field
-from typing import List
+from dataclasses import dataclass
 from pandas import to_datetime, Timestamp
 from os import name as os_name
-from pandas import to_datetime
 
 @dataclass(frozen=True)
 class SnapshotScheduleParameters:
-    file_interval: timedelta = timedelta(seconds=30)
+    file_interval: timedelta = timedelta(seconds=300)
     timerange: (datetime, datetime) = (datetime.utcnow(), datetime.utcnow() + timedelta(days=365*10))
-    interval_stats: List[str] = field(default_factory=list)
     interval_length: timedelta = timedelta(seconds=5)
-    repeat_any: timedelta = timedelta(seconds=10)
+    repeat_any: timedelta = timedelta(seconds=60)
     #repeat_any_offset: timedelta = timedelta(seconds=0) # todo
     
     if repeat_any < interval_length:
@@ -149,28 +146,8 @@ def get_thermal_image_metadata(width: int, height: int) -> (np.ndarray, EvoIRFra
     _ = lib.evo_irimager_get_thermal_image_metadata(w, h, data_pointer, meta_pointer)
     return data, meta
 
-
-res = -1
-retries = 0
-n_retries = 10
-
-while res != 0:
-    print('...')
-    res = usb_init('config.xml')
-    if retries > 10:
-        raise ValueError("Could not initialise USB connection")
-        terminate()
-    retries += 1
-    sleep(0.25)
-
-sn = get_serial()
-
-if sn == 0:
-    raise ValueError("Invalid serial number")
-
-set_shutter_mode(0)
-trigger_shutter_flag()
-sleep(0.5)
+# todo: how to schedule in different schedules?
+# e.g. usually 1 sample per min, but then on the hour do a 1 min interval.
 
 def write_file():
     width, height = get_thermal_image_size()
@@ -196,7 +173,11 @@ def write_file():
     n_images = int((interval_length_s * fps_expected) + 0.5)
     
     for j in range(0, interval_timesteps_remaining):
+        # todo: probably need to figure out all delays at the start of the loop
+        # so that we can add in a flag here also. i.e. move/edit " if j != (interval_timesteps_remaining - 1):"
+        # to the top of the loop somehow
         if j == 0: #start off on the right timestep. todo: tidy
+            trigger_shutter_flag()
             time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
             while time_until_next_interval.total_seconds() < 0:
                 time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
@@ -269,6 +250,26 @@ def write_file():
                              't_b_std': {'zlib': True, "complevel": 7},
                              'nsamples': {'zlib': True, "complevel": 7},
                              })
+res = -1
+retries = 0
+n_retries = 10
+while res != 0:
+    print('...')
+    res = usb_init('config.xml')
+    if retries > 10:
+        raise ValueError("Could not initialise USB connection")
+        terminate()
+    retries += 1
+    sleep(0.25)
 
+sn = get_serial()
+
+if sn == 0:
+    raise ValueError("Invalid serial number")
+
+set_shutter_mode(0)
+trigger_shutter_flag()
+sleep(0.5)
+# todo - wrap in try catch and redo usb_init as appropriate
 while True:
     write_file()
