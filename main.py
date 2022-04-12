@@ -146,9 +146,6 @@ def get_thermal_image_metadata(width: int, height: int) -> (np.ndarray, EvoIRFra
     _ = lib.evo_irimager_get_thermal_image_metadata(w, h, data_pointer, meta_pointer)
     return data, meta
 
-# todo: how to schedule in different schedules?
-# e.g. usually 1 sample per min, but then on the hour do a 1 min interval.
-
 def write_file():
     width, height = get_thermal_image_size()
     interval_timesteps_remaining = sschedule.interval_timesteps_remaining()
@@ -171,17 +168,13 @@ def write_file():
     fps_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
     nsamples_timeseries = np.empty(interval_timesteps_remaining, dtype=int)
     n_images = int((interval_length_s * fps_expected) + 0.5)
-    
+    time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
+    while time_until_next_interval.total_seconds() < 0:
+        time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
+    sleep(time_until_next_interval.total_seconds())
+    trigger_shutter_flag() # todo: need to make this not run all the time - make class Shutter, Shutter.trigger(), only actually trigger if time since last is OK
     for j in range(0, interval_timesteps_remaining):
-        # todo: probably need to figure out all delays at the start of the loop
-        # so that we can add in a flag here also. i.e. move/edit " if j != (interval_timesteps_remaining - 1):"
-        # to the top of the loop somehow
-        if j == 0: #start off on the right timestep. todo: tidy
-            trigger_shutter_flag()
-            time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
-            while time_until_next_interval.total_seconds() < 0:
-                time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
-            sleep(time_until_next_interval.total_seconds())
+
         print(f'started n_interval_timestep {j + 1} / {interval_timesteps_remaining} at {datetime.utcnow()}')
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
