@@ -9,15 +9,15 @@ from dataclasses import dataclass, field
 from typing import List
 from pandas import to_datetime, Timestamp
 from os import name as os_name
-
+from pandas import to_datetime
 
 @dataclass(frozen=True)
 class SnapshotScheduleParameters:
-    file_interval: timedelta = timedelta(seconds=300)
+    file_interval: timedelta = timedelta(seconds=30)
     timerange: (datetime, datetime) = (datetime.utcnow(), datetime.utcnow() + timedelta(days=365*10))
     interval_stats: List[str] = field(default_factory=list)
     interval_length: timedelta = timedelta(seconds=5)
-    repeat_any: timedelta = timedelta(seconds=30)
+    repeat_any: timedelta = timedelta(seconds=10)
     #repeat_any_offset: timedelta = timedelta(seconds=0) # todo
     
     if repeat_any < interval_length:
@@ -175,7 +175,7 @@ sleep(0.5)
 def write_file():
     width, height = get_thermal_image_size()
     interval_timesteps_remaining = sschedule.interval_timesteps_remaining()
-    print(datetime.now())
+    print(datetime.utcnow())
     print(interval_timesteps_remaining)
     interval_length_s = sschedule.interval_length.total_seconds()
     file_end_raw = sschedule.current_file_time_end()
@@ -199,16 +199,16 @@ def write_file():
         if j == 0: #start off on the right timestep. todo: tidy
             time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
             while time_until_next_interval.total_seconds() < 0:
-                sleep_time = sschedule.current_interval_start() - datetime.utcnow()
-            sleep(sleep_time.total_seconds())
-        print(f'started n_interval_timestep {j} / {interval_timesteps_remaining} at {datetime.utcnow()}')
+                time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
+            sleep(time_until_next_interval.total_seconds())
+        print(f'started n_interval_timestep {j + 1} / {interval_timesteps_remaining} at {datetime.utcnow()}')
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
         for i in range(0, n_images):
             image, meta = get_thermal_image_metadata(width, height)
             images_raw[i, :, :] = image
             #print(f'got image {i} / {n_images} at {datetime.utcnow()}')
-        interval_end_time = datetime.now()
+        interval_end_time = datetime.utcnow()
         print(f'interval has timestamp {interval_end_time}')
         dtime = interval_end_time - interval_start_time
         fps = n_images / dtime.total_seconds()
