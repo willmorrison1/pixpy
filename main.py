@@ -3,13 +3,14 @@ from time import sleep
 import xarray as xr
 import pixpy 
 import numpy as np
+import xml.etree.ElementTree as ET
 
 sschedule = pixpy.SnapshotSchedule()
 
 config_file = 'config.xml'
-# hereiam: read config file to get fps_expected and serial number. 
+tree = ET.parse(config_file)
 
-fps_expected = 30
+fps_expected = int(tree.getroot().find('framerate').text)
 
 def write_file():
     width, height = pixpy.get_thermal_image_size()
