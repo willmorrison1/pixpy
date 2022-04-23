@@ -6,8 +6,11 @@ import numpy as np
 
 sschedule = pixpy.SnapshotSchedule()
 
+config_file = 'config.xml'
+# hereiam: read config file to get fps_expected and serial number. 
+
 fps_expected = 30
-        
+
 def write_file():
     width, height = pixpy.get_thermal_image_size()
     interval_timesteps_remaining = sschedule.interval_timesteps_remaining()
@@ -110,7 +113,7 @@ retries = 0
 n_retries = 10
 while res != 0:
     print('...')
-    res = pixpy.usb_init('config.xml')
+    res = pixpy.usb_init(config_file)
     if retries > 10:
         raise ValueError("Could not initialise USB connection")
         pixpy.terminate()
