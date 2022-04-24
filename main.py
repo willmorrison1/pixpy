@@ -31,10 +31,8 @@ tree = ET.parse(args.config_file)
 fps_expected = int(tree.getroot().find('framerate').text)
 sn_expected = int(tree.getroot().find('serial').text)
 
-# add assumed delay for shutter and for skipped frame after shutter. deduct this from 
-# wait time
 shutter_delay = 0.1 # assumed
-skip_frames_after_shutter_delay_s = (2 / fps_expected)
+skip_frames_after_shutter_delay_s = (2 / fps_expected) # number of frames to skip after shutter
 pre_sample_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
 
 def write_file():
