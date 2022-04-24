@@ -5,6 +5,7 @@ import pixpy
 import numpy as np
 import xml.etree.ElementTree as ET
 import argparse
+from os import path
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--config_file', type=str, help='The config.xml file', 
@@ -15,6 +16,8 @@ parser.add_argument('--sample_length', type=int,
                     help='The lenght of time for a sample (seconds)', default=5)
 parser.add_argument('--repeat_any', type=int, 
                     help='The length of time between samples (seconds)', default=60)
+parser.add_argument('--output_directory', type=str, 
+                    help='The name of the output directory', default='OUT')
 args = parser.parse_args()
 
 sschedule = pixpy.SnapshotSchedule(
@@ -123,14 +126,15 @@ def write_file():
                 attrs=dict(description="pixpy",
                            serial=sn),
             )
-            ds.to_netcdf(f"OUT/{file_name}.nc", 
+            ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'), 
                          encoding={
                              'time': {'dtype': 'i4'}, 
-                             't_b_median': {'zlib': True, "complevel": 7},
-                             't_b_min': {'zlib': True, "complevel": 7},
-                             't_b_max': {'zlib': True, "complevel": 7},
-                             't_b_std': {'zlib': True, "complevel": 7},
-                             'nsamples': {'zlib': True, "complevel": 7},
+                             't_b_median': {'zlib': True, "complevel": 5},
+                             't_b_min': {'zlib': True, "complevel": 5},
+                             't_b_max': {'zlib': True, "complevel": 5},
+                             't_b_std': {'zlib': True, "complevel": 5},
+                             't_b_snapshot': {'zlib': True, "complevel": 5},
+                             'nsamples': {'zlib': True, "complevel": 5},
                              })
 
 pixpy.usb_init_retry(args.config_file)
