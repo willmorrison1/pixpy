@@ -1,16 +1,38 @@
-from datetime import datetime
+from datetime import datetime, timedelta
 from time import sleep
 import xarray as xr
 import pixpy 
 import numpy as np
 import xml.etree.ElementTree as ET
+import argparse
 
-sschedule = pixpy.SnapshotSchedule()
+parser = argparse.ArgumentParser()
+parser.add_argument('--config_file', type=str, help='The config.xml file', 
+                    default='config.xml')
+parser.add_argument('--file_interval', type=int, 
+                    help='The time interval for each file (seconds)', default=300)
+parser.add_argument('--sample_length', type=int, 
+                    help='The lenght of time for a sample (seconds)', default=5)
+parser.add_argument('--repeat_any', type=int, 
+                    help='The length of time between samples (seconds)', default=60)
+args = parser.parse_args()
 
-config_file = 'config.xml'
-tree = ET.parse(config_file)
+sschedule = pixpy.SnapshotSchedule(
+    file_sample=timedelta(seconds=args.file_interval),
+    sample_length=timedelta(seconds=args.sample_length),
+    repeat_any=timedelta(args.repeat_any),
+    )
+
+tree = ET.parse(args.config_file)
 
 fps_expected = int(tree.getroot().find('framerate').text)
+sn_expected = int(tree.getroot().find('serial').text)
+
+# add assumed delay for shutter and for skipped frame after shutter. deduct this from 
+# wait time
+shutter_delay = 0.1 # assumed
+skip_frames_after_shutter_delay_s = (2 / fps_expected)
+pre_sample_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
 
 def write_file():
     width, height = pixpy.get_thermal_image_size()
@@ -38,9 +60,9 @@ def write_file():
     while time_until_next_interval.total_seconds() < 0:
         time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
     sleep(time_until_next_interval.total_seconds())
-    pixpy.trigger_shutter_flag() # todo: need to make this not run all the time - make class Shutter, Shutter.trigger(), only actually trigger if time since last is OK
     for j in range(0, interval_timesteps_remaining):
-
+        shut.trigger()
+        sleep(skip_frames_after_shutter_delay_s)
         print(f'started n_interval_timestep {j + 1} / {interval_timesteps_remaining} at {datetime.utcnow()}')
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
@@ -73,7 +95,7 @@ def write_file():
             if wait_time_until_next_interval_s < 0:
                 print("Next interval start time missed. Slow the sampling rate and/or fps.")
                 wait_time_until_next_interval_s = 0
-            sleep(wait_time_until_next_interval_s)
+            sleep(wait_time_until_next_interval_s - pre_sample_delay_s)
         else:
             x = np.arange(0, 160)
             y = np.flip(np.arange(0, 120))
@@ -84,6 +106,7 @@ def write_file():
                     t_b_min=(["time", "y", "x"], image_min_timeseries),
                     t_b_max=(["time", "y", "x"], image_max_timeseries),
                     t_b_std=(["time", "y", "x"], image_std_timeseries),
+                    t_b_snapshot=(["time", "y", "x"], image),
                     t_box=(["time"], tbox_timeseries),
                     t_chip=(["time"], tchip_timeseries),
                     flag_state=(["time"], flagstate_timeseries),
@@ -109,26 +132,21 @@ def write_file():
                              't_b_std': {'zlib': True, "complevel": 7},
                              'nsamples': {'zlib': True, "complevel": 7},
                              })
-res = -1
-retries = 0
-n_retries = 10
-while res != 0:
-    print('...')
-    res = pixpy.usb_init(config_file)
-    if retries > 10:
-        raise ValueError("Could not initialise USB connection")
-        pixpy.terminate()
-    retries += 1
-    sleep(0.25)
+
+pixpy.usb_init_retry(args.config_file)
 
 sn = pixpy.get_serial()
+shut = pixpy.Shutter()
 
 if sn == 0:
     raise ValueError("Invalid serial number")
+    
+if sn_expected != sn:
+    raise ValueError(f'sn of attached camera is different to sn in {args.config_file}')
 
 pixpy.set_shutter_mode(0)
-pixpy.trigger_shutter_flag()
-sleep(0.5)
+shut.trigger()
+sleep(0.25)
 # todo - wrap in try catch and redo usb_init as appropriate
 while True:
     write_file()

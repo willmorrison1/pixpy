@@ -4,6 +4,7 @@ from pandas import to_datetime, Timestamp
 import ctypes
 from ctypes import util as ctypes_util
 from os import name as os_name
+from time import sleep
 import numpy as np
 from enum import Enum
 
@@ -14,17 +15,15 @@ else:
         #linux:
         lib = ctypes.cdll.LoadLibrary(ctypes_util.find_library("irdirectsdk"))
         
+
 @dataclass(frozen=True)
 class SnapshotScheduleParameters:
-    file_interval: timedelta = timedelta(seconds=300)
-    timerange: (datetime, datetime) = (datetime.utcnow(), datetime.utcnow() + timedelta(days=365*10))
-    interval_length: timedelta = timedelta(seconds=5)
+    file_sample: timedelta = timedelta(seconds=300)
+    sample_length: timedelta = timedelta(seconds=5)
     repeat_any: timedelta = timedelta(seconds=60)
     
-    if repeat_any <= interval_length:
-        raise ValueError("repeat_any <= interval_length")
-    if timerange[1] < timerange[0]:
-        raise ValueError("end time is before start time")
+    if repeat_any <= sample_length:
+        raise ValueError("repeat_any <= sample_length")
     #todo: further validation
     
 class SnapshotSchedule(SnapshotScheduleParameters):
@@ -32,20 +31,20 @@ class SnapshotSchedule(SnapshotScheduleParameters):
         time_now_offset = datetime.utcnow() + (self.repeat_any / 2)
         return to_datetime(time_now_offset).round(self.repeat_any)
     
-    def current_interval_start(self) -> Timestamp:
-        return self.next_snapshot() - self.interval_length
+    def current_sample_start(self) -> Timestamp:
+        return self.next_snapshot() - self.sample_length
     
-    def current_interval_end(self) -> datetime:
+    def current_sample_end(self) -> datetime:
         return self.next_snapshot()
 
     def current_file_time_end(self) -> Timestamp:
-        time_now_offset = datetime.utcnow() + (self.file_interval / 2)
+        time_now_offset = datetime.utcnow() + (self.file_sample / 2)
         return to_datetime(time_now_offset).round(self.file_interval)
     
-    def interval_timesteps_remaining(self) -> int:
+    def sample_timesteps_remaining(self) -> int:
         final_snapshot = self.current_file_time_end()
-        n_intervals = int((final_snapshot - datetime.utcnow() + self.interval_length) / self.repeat_any)
-        return n_intervals
+        n_samples = int((final_snapshot - datetime.utcnow() + self.sample_length) / self.repeat_any)
+        return n_samples
 
 def usb_init(xml_config: str, formats_def: str = None, log_file: str = None) -> int:
     return lib.evo_irimager_usb_init(xml_config.encode(), None if formats_def is None else formats_def.encode(), None if log_file is None else log_file.encode())
@@ -139,3 +138,31 @@ def get_thermal_image_metadata(width: int, height: int) -> (np.ndarray, EvoIRFra
     meta_pointer = ctypes.pointer(meta)
     _ = lib.evo_irimager_get_thermal_image_metadata(w, h, data_pointer, meta_pointer)
     return data, meta
+
+@dataclass()
+class Shutter:
+    last_trigger_result: int = None
+    last_trigger_time: int = datetime.utcnow() - timedelta(days=365)
+    min_trigger_interval: timedelta = timedelta(seconds=15)
+    cycle_time: timedelta = None
+    triggers: int = 0
+    def trigger(self):
+        trigger_start_time = datetime.utcnow()
+        if (trigger_start_time - self.last_trigger_time) > self.min_trigger_interval:
+            self.last_trigger_result = trigger_shutter_flag()
+            trigger_end_time = datetime.utcnow()
+            self.last_trigger_time = trigger_end_time
+            self.cycle_time = trigger_end_time - trigger_start_time
+            self.triggers += 1
+            
+def usb_init_retry(config_file: str, n_retries: int = 10, retry_time: float = 0.25):
+    res = -1
+    retries = 0
+    while res != 0:
+        print('...')
+        res = usb_init(config_file)
+        if retries > n_retries:
+            raise ValueError("Could not initialise USB connection")
+            terminate()
+        retries += 1
+        sleep(retry_time)
