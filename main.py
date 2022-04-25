@@ -1,41 +1,76 @@
 from datetime import datetime, timedelta
 from time import sleep
 import xarray as xr
-import pixpy 
+import pixpy
 import numpy as np
 import xml.etree.ElementTree as ET
 import argparse
 from os import path
 
-parser = argparse.ArgumentParser()
-parser.add_argument('--config_file', type=str, help='The config.xml file', 
-                    default='config.xml')
-parser.add_argument('--file_interval_length', type=int, 
-                    help='The time interval for each file (seconds)', default=300)
-parser.add_argument('--sample_length', type=int, 
-                    help='The lenght of time for a sample (seconds)', default=5)
-parser.add_argument('--repeat_any', type=int, 
-                    help='The length of time between samples (seconds)', default=60)
-parser.add_argument('--output_directory', type=str, 
-                    help='The name of the output directory', default='OUT')
-args = parser.parse_args()
 
-sschedule = pixpy.SnapshotSchedule(
-    file_interval_length=timedelta(seconds=args.file_interval_length),
-    sample_length=timedelta(seconds=args.sample_length),
-    repeat_any=timedelta(args.repeat_any),
-    )
+def get_clargs():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config_file', type=str, help='The config.xml file', 
+                        default='config.xml')
+    parser.add_argument('--file_interval_length', type=int, 
+                        help='The time interval for each file (seconds)', default=300)
+    parser.add_argument('--sample_length', type=int, 
+                        help='The lenght of time for a sample (seconds)', default=5)
+    parser.add_argument('--repeat_any', type=int, 
+                        help='The length of time between samples (seconds)', default=60)
+    parser.add_argument('--output_directory', type=str, 
+                        help='The name of the output directory', default='OUT')
+    return parser.parse_args()
 
-tree = ET.parse(args.config_file)
+def get_config_vars(config_file):
+    
+    tree = ET.parse(config_file)
+    fps_config = int(tree.getroot().find('framerate').text)
+    sn_config = int(tree.getroot().find('serial').text)
+    
+    return {
+        'fps': fps_config, 
+        'sn': sn_config,
+        }
 
-fps_expected = int(tree.getroot().find('framerate').text)
-sn_expected = int(tree.getroot().find('serial').text)
+def pixpy_app_setup():
+    args = get_clargs()
+    
+    sschedule = pixpy.SnapshotSchedule(
+        file_interval_length=timedelta(seconds=args.file_interval_length),
+        sample_length=timedelta(seconds=args.sample_length),
+        repeat_any=timedelta(args.repeat_any),
+        )
+    shutter = pixpy.Shutter()
+    
+    config_vars = get_config_vars(args.config_file)
+    
+    pixpy.usb_init_retry(args.config_file)
+    
+    sn = pixpy.get_serial()
+    
+    if sn == 0:
+        raise ValueError("Invalid serial number")
+        
+    if config_vars['sn'] != sn:
+        raise ValueError(
+            f'sn of attached camera is different to sn in {args.config_file}'
+            )
+    
+    pixpy.set_shutter_mode(0)
+    shutter.trigger()
+    sleep(0.25)
+    
+    return sschedule, config_vars, shutter
 
-shutter_delay = 0.1 # assumed
-skip_frames_after_shutter_delay_s = (2 / fps_expected) # number of frames to skip after shutter
-pre_sample_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
+def pixpy_app():
+    sschedule, config_vars, shutter = pixpy_app_setup()
+    #hereiam - tidy all..
+    # number of frames to skip after shutter
+    shutter_delay = 0.1 # assumed
+    skip_frames_after_shutter_delay_s = (2 / config_vars['fps']) 
+    pre_sample_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
 
-def write_file():
     width, height = pixpy.get_thermal_image_size()
     interval_timesteps_remaining = sschedule.interval_timesteps_remaining()
     print(datetime.utcnow())
@@ -56,13 +91,13 @@ def write_file():
     counterHW_timeseries = np.empty(interval_timesteps_remaining, dtype=np.longlong)
     fps_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
     nsamples_timeseries = np.empty(interval_timesteps_remaining, dtype=int)
-    n_images = int((interval_length_s * fps_expected) + 0.5)
+    n_images = int((interval_length_s * config_vars['fps']) + 0.5)
     time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
     while time_until_next_interval.total_seconds() < 0:
         time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, interval_timesteps_remaining):
-        shut.trigger()
+        shutter.trigger()
         sleep(skip_frames_after_shutter_delay_s)
         print(f'started n_interval_timestep {j + 1} / {interval_timesteps_remaining} at {datetime.utcnow()}')
         interval_start_time = datetime.utcnow()
@@ -135,20 +170,8 @@ def write_file():
                              'nsamples': {'zlib': True, "complevel": 5},
                              })
 
-pixpy.usb_init_retry(args.config_file)
 
-sn = pixpy.get_serial()
-shut = pixpy.Shutter()
-
-if sn == 0:
-    raise ValueError("Invalid serial number")
-    
-if sn_expected != sn:
-    raise ValueError(f'sn of attached camera is different to sn in {args.config_file}')
-
-pixpy.set_shutter_mode(0)
-shut.trigger()
-sleep(0.25)
 # todo - wrap in try catch and redo usb_init as appropriate
-while True:
-    write_file()
+if __name__ == "__main__":
+    while True:
+        pixpy_app()
