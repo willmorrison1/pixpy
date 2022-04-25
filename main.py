@@ -10,7 +10,7 @@ from os import path
 parser = argparse.ArgumentParser()
 parser.add_argument('--config_file', type=str, help='The config.xml file', 
                     default='config.xml')
-parser.add_argument('--file_interval', type=int, 
+parser.add_argument('--file_interval_length', type=int, 
                     help='The time interval for each file (seconds)', default=300)
 parser.add_argument('--sample_length', type=int, 
                     help='The lenght of time for a sample (seconds)', default=5)
@@ -21,7 +21,7 @@ parser.add_argument('--output_directory', type=str,
 args = parser.parse_args()
 
 sschedule = pixpy.SnapshotSchedule(
-    file_sample=timedelta(seconds=args.file_interval),
+    file_interval_length=timedelta(seconds=args.file_interval_length),
     sample_length=timedelta(seconds=args.sample_length),
     repeat_any=timedelta(args.repeat_any),
     )
