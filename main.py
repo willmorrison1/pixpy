@@ -4,23 +4,12 @@ import xarray as xr
 import pixpy
 import numpy as np
 import xml.etree.ElementTree as ET
-import argparse
 from os import path
+from args import args
 
 
-def get_clargs():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--config_file', type=str, help='The config.xml file', 
-                        default='config.xml')
-    parser.add_argument('--file_interval_length', type=int, 
-                        help='The time interval for each file (seconds)', default=300)
-    parser.add_argument('--sample_length', type=int, 
-                        help='The lenght of time for a sample (seconds)', default=5)
-    parser.add_argument('--repeat_any', type=int, 
-                        help='The length of time between samples (seconds)', default=60)
-    parser.add_argument('--output_directory', type=str, 
-                        help='The name of the output directory', default='OUT')
-    return parser.parse_args()
+shutter_delay = 0.1 # assumed
+skip_frames_after_shutter_delay = 2
 
 def get_config_vars(config_file):
     
@@ -33,8 +22,7 @@ def get_config_vars(config_file):
         'sn': sn_config,
         }
 
-def pixpy_app_setup():
-    args = get_clargs()
+def app_setup():
     
     sschedule = pixpy.SnapshotSchedule(
         file_interval_length=timedelta(seconds=args.file_interval_length),
@@ -54,21 +42,29 @@ def pixpy_app_setup():
         
     if config_vars['sn'] != sn:
         raise ValueError(
-            f'sn of attached camera is different to sn in {args.config_file}'
+            f'sn of attached camera ({sn}) is different to sn in {args.config_file}'
             )
     
     pixpy.set_shutter_mode(0)
     shutter.trigger()
-    sleep(0.25)
+    sleep(shutter_delay * 2)
     
     return sschedule, config_vars, shutter
 
+def get_file_name(sschedule, sn):
+    
+    file_end_raw = sschedule.current_file_time_end()
+    return str(sn) + \
+        str(file_end_raw).replace("-", "").replace(":", "").replace(" ", "") 
+
 def pixpy_app():
-    sschedule, config_vars, shutter = pixpy_app_setup()
-    #hereiam - tidy all..
+    
+    sschedule, config_vars, shutter = app_setup()
+    
     # number of frames to skip after shutter
-    shutter_delay = 0.1 # assumed
-    skip_frames_after_shutter_delay_s = (2 / config_vars['fps']) 
+    skip_frames_after_shutter_delay_s = (
+        skip_frames_after_shutter_delay / config_vars['fps']
+        ) 
     pre_sample_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
 
     width, height = pixpy.get_thermal_image_size()
@@ -76,8 +72,7 @@ def pixpy_app():
     print(datetime.utcnow())
     print(interval_timesteps_remaining)
     interval_length_s = sschedule.interval_length.total_seconds()
-    file_end_raw = sschedule.current_file_time_end()
-    file_name = str(file_end_raw).replace("-", "").replace(":", "").replace(" ", "")
+    file_name = get_file_name(sschedule, config_vars['sn'])
     
     time_timeseries = np.empty(interval_timesteps_remaining)
     image_median_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
@@ -157,7 +152,7 @@ def pixpy_app():
                     time=[datetime.utcfromtimestamp(i) for i in time_timeseries],
                 ),
                 attrs=dict(description="pixpy",
-                           serial=sn),
+                           serial=config_vars['sn']),
             )
             ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'), 
                          encoding={
