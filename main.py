@@ -70,7 +70,7 @@ def pixpy_app():
     sample_timesteps_remaining = sschedule.sample_timesteps_remaining()
     print(datetime.utcnow())
     print(sample_timesteps_remaining)
-    file_interval_length_s = sschedule.file_interval_length.total_seconds()
+    file_interval_s = sschedule.file_interval.total_seconds()
     file_name = get_file_name(sschedule, config_vars['sn'])
     
     time_timeseries = np.empty(sample_timesteps_remaining)
@@ -85,7 +85,7 @@ def pixpy_app():
     counterHW_timeseries = np.empty(sample_timesteps_remaining, dtype=np.longlong)
     fps_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
     nsamples_timeseries = np.empty(sample_timesteps_remaining, dtype=int)
-    n_images = int((file_interval_length_s * config_vars['fps']) + 0.5)
+    n_images = int((file_interval_s * config_vars['fps']) + 0.5)
     time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
     while time_until_next_interval.total_seconds() < 0:
         time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
