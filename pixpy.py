@@ -18,36 +18,36 @@ else:
         
 @dataclass(frozen=True) # todo: docstr
 class SnapshotScheduleParameters:
-    file_interval_length: timedelta = timedelta(seconds=300)
-    sample_length: timedelta = timedelta(seconds=5)
-    repeat_any: timedelta = timedelta(seconds=60)
+    file_interval: timedelta = timedelta(seconds=300)
+    sample_interval: timedelta = timedelta(seconds=5)
+    sample_resolution: timedelta = timedelta(seconds=60)
     
-    if repeat_any <= sample_length:
-        raise ValueError('repeat_any <= sample_length')
-    if file_interval_length <= sample_length:
-        raise ValueError('file_interval_length <= sample_length')
-    if file_interval_length <= repeat_any:
-        raise ValueError("file_interval_length <= repeat_any")
+    if sample_resolution <= sample_interval:
+        raise ValueError('sample_resolution <= sample_interval')
+    if file_interval <= sample_interval:
+        raise ValueError('file_interval <= sample_interval')
+    if file_interval <= sample_resolution:
+        raise ValueError("file_interval <= sample_resolution")
     
 class SnapshotSchedule(SnapshotScheduleParameters):
     def next_snapshot(self) -> Timestamp:
-        time_now_offset = datetime.utcnow() + (self.repeat_any / 2)
-        return to_datetime(time_now_offset).round(self.repeat_any)
+        time_now_offset = datetime.utcnow() + (self.sample_resolution / 2)
+        return to_datetime(time_now_offset).round(self.sample_resolution)
     
     def current_sample_start(self) -> Timestamp:
-        return self.next_snapshot() - self.sample_length
+        return self.next_snapshot() - self.sample_interval
     
     def current_sample_end(self) -> datetime:
         return self.next_snapshot()
 
     def current_file_time_end(self) -> Timestamp:
-        time_now_offset = datetime.utcnow() + (self.file_sample / 2)
+        time_now_offset = datetime.utcnow() + (self.file_interval / 2)
         return to_datetime(time_now_offset).round(self.file_interval)
     
     def sample_timesteps_remaining(self) -> int:
         final_snapshot = self.current_file_time_end()
         n_samples = int((final_snapshot - datetime.utcnow() + \
-                         self.sample_length) / self.repeat_any)
+                         self.sample_interval) / self.sample_resolution)
         return n_samples
 
 # todo: make min_trigger_interval the only settable parameter

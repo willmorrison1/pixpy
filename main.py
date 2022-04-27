@@ -1,3 +1,4 @@
+from args import args
 from datetime import datetime, timedelta
 from time import sleep
 import xarray as xr
@@ -5,8 +6,6 @@ import pixpy
 import numpy as np
 import xml.etree.ElementTree as ET
 from os import path
-from args import args
-
 
 shutter_delay = 0.1 # assumed
 skip_frames_after_shutter_delay = 2
@@ -14,8 +13,8 @@ skip_frames_after_shutter_delay = 2
 def get_config_vars(config_file):
     
     tree = ET.parse(config_file)
-    fps_config = int(tree.getroot().find('framerate').text)
-    sn_config = int(tree.getroot().find('serial').text)
+    fps_config = int(float(tree.getroot().find('framerate').text))
+    sn_config = int(float(tree.getroot().find('serial').text))
     
     return {
         'fps': fps_config, 
@@ -25,9 +24,9 @@ def get_config_vars(config_file):
 def app_setup():
     
     sschedule = pixpy.SnapshotSchedule(
-        file_interval_length=timedelta(seconds=args.file_interval_length),
-        sample_length=timedelta(seconds=args.sample_length),
-        repeat_any=timedelta(args.repeat_any),
+        file_interval=timedelta(seconds=args.file_interval),
+        sample_interval=timedelta(seconds=args.sample_interval),
+        sample_resolution=timedelta(args.sample_resolution),
         )
     shutter = pixpy.Shutter()
     
@@ -68,33 +67,33 @@ def pixpy_app():
     pre_sample_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
 
     width, height = pixpy.get_thermal_image_size()
-    interval_timesteps_remaining = sschedule.interval_timesteps_remaining()
+    sample_timesteps_remaining = sschedule.sample_timesteps_remaining()
     print(datetime.utcnow())
-    print(interval_timesteps_remaining)
-    interval_length_s = sschedule.interval_length.total_seconds()
+    print(sample_timesteps_remaining)
+    file_interval_length_s = sschedule.file_interval_length.total_seconds()
     file_name = get_file_name(sschedule, config_vars['sn'])
     
-    time_timeseries = np.empty(interval_timesteps_remaining)
-    image_median_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
-    image_min_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
-    image_max_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
-    image_std_timeseries = np.empty((interval_timesteps_remaining, height, width), dtype=np.uint16)
-    tbox_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
-    tchip_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
-    flagstate_timeseries = np.empty(interval_timesteps_remaining, dtype=int)
-    counter_timeseries = np.empty(interval_timesteps_remaining, dtype=np.longlong)
-    counterHW_timeseries = np.empty(interval_timesteps_remaining, dtype=np.longlong)
-    fps_timeseries = np.empty(interval_timesteps_remaining, dtype=float)
-    nsamples_timeseries = np.empty(interval_timesteps_remaining, dtype=int)
-    n_images = int((interval_length_s * config_vars['fps']) + 0.5)
-    time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
+    time_timeseries = np.empty(sample_timesteps_remaining)
+    image_median_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
+    image_min_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
+    image_max_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
+    image_std_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
+    tbox_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
+    tchip_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
+    flagstate_timeseries = np.empty(sample_timesteps_remaining, dtype=int)
+    counter_timeseries = np.empty(sample_timesteps_remaining, dtype=np.longlong)
+    counterHW_timeseries = np.empty(sample_timesteps_remaining, dtype=np.longlong)
+    fps_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
+    nsamples_timeseries = np.empty(sample_timesteps_remaining, dtype=int)
+    n_images = int((file_interval_length_s * config_vars['fps']) + 0.5)
+    time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
     while time_until_next_interval.total_seconds() < 0:
-        time_until_next_interval = sschedule.current_interval_start() - datetime.utcnow()
+        time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
     sleep(time_until_next_interval.total_seconds())
-    for j in range(0, interval_timesteps_remaining):
+    for j in range(0, sample_timesteps_remaining):
         shutter.trigger()
         sleep(skip_frames_after_shutter_delay_s)
-        print(f'started n_interval_timestep {j + 1} / {interval_timesteps_remaining} at {datetime.utcnow()}')
+        print(f'started n_interval_timestep {j + 1} / {sample_timesteps_remaining} at {datetime.utcnow()}')
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
         for i in range(0, n_images):
@@ -117,8 +116,8 @@ def pixpy_app():
         counterHW_timeseries[j] = meta.counterHW
         fps_timeseries[j] = fps
         nsamples_timeseries[j] = n_images
-        if j != (interval_timesteps_remaining - 1):
-            next_interval_time = interval_start_time + sschedule.repeat_any
+        if j != (sample_timesteps_remaining - 1):
+            next_interval_time = interval_start_time + sschedule.sample_resolution
             current_time = datetime.utcnow()
             wait_time_until_next_interval_s = (next_interval_time - 
                                                current_time).total_seconds()
