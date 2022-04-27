@@ -67,6 +67,9 @@ class Shutter:
             self.last_trigger_time = trigger_end_time
             self.cycle_time = trigger_end_time - trigger_start_time
             self.triggers += 1
+            return 0
+        else:
+            return -1
             
 class ShutterMode(Enum):
     MANUAL = 0

@@ -53,7 +53,7 @@ def app_setup():
 def get_file_name(sschedule, sn):
     
     file_end_raw = sschedule.current_file_time_end()
-    return str(sn) + \
+    return str(sn) + '_' + \
         str(file_end_raw).replace("-", "").replace(":", "").replace(" ", "") 
 
 def pixpy_app(sschedule, config_vars, shutter):
@@ -100,8 +100,9 @@ def pixpy_app(sschedule, config_vars, shutter):
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
         print(f'started n_interval_timestep {j + 1} / {sample_timesteps_remaining} at {datetime.utcnow()}')        
-        shutter.trigger(sleep=True)
-        sleep(skip_frames_after_shutter_delay_s)
+        shutter.trigger()
+        print(f'shutter triggered {shutter.triggers} times')
+        sleep(pre_interval_delay_s)
         print(f'waited for shutter until {datetime.utcnow()}')        
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
