@@ -7,7 +7,7 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from os import path
 
-shutter_delay = 0.1 # assumed
+shutter_delay = 0.3 # assumed
 skip_frames_after_shutter_delay = 2
 
 def get_config_vars(config_file):
@@ -60,17 +60,11 @@ def pixpy_app(sschedule, config_vars, shutter):
     
     print(sschedule)
     
-    # number of frames to skip after shutter
-    skip_frames_after_shutter_delay_s = (
-        skip_frames_after_shutter_delay / config_vars['fps']
-        ) 
-    pre_interval_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
-
     width, height = pixpy.get_thermal_image_size()
     sample_timesteps_remaining = sschedule.sample_timesteps_remaining()
     print(datetime.utcnow())
     print(sample_timesteps_remaining)
-    print(f'pre_interval_delay_s {pre_interval_delay_s}')
+    print(f'shutter_delay {shutter_delay}')
     sample_interval_s = sschedule.sample_interval.total_seconds()
     print(f'sample_interval_s {sample_interval_s}')
     file_name = get_file_name(sschedule, config_vars['sn'])
@@ -92,17 +86,19 @@ def pixpy_app(sschedule, config_vars, shutter):
     print(f'n_images {n_images}')
     print(f"fps {config_vars['fps']}")
     
-    time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
+    time_until_next_interval = sschedule.current_sample_start() - \
+        datetime.utcnow() - timedelta(seconds=shutter_delay)
     print(f'time_until_next_interval {time_until_next_interval}')
-    while time_until_next_interval.total_seconds() < 0:
-        time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
+    while (time_until_next_interval.total_seconds() - shutter_delay) < 0:
+        time_until_next_interval = sschedule.current_sample_start() - \
+            datetime.utcnow() - timedelta(seconds=shutter_delay)
     print(f"sleeping for {time_until_next_interval.total_seconds()}")
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
         print(f'started n_interval_timestep {j + 1} / {sample_timesteps_remaining} at {datetime.utcnow()}')        
         shutter.trigger()
         print(f'shutter triggered {shutter.triggers} times')
-        sleep(pre_interval_delay_s)
+        sleep(shutter_delay)
         print(f'waited for shutter until {datetime.utcnow()}')        
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
@@ -132,7 +128,7 @@ def pixpy_app(sschedule, config_vars, shutter):
             current_time = datetime.utcnow()
             wait_time_until_next_interval_s = (
                 next_interval_time - current_time
-                ).total_seconds() - pre_interval_delay_s
+                ).total_seconds() - shutter_delay
                 
             print(f'Time until next interval: {wait_time_until_next_interval_s}')
             if wait_time_until_next_interval_s < 0:
@@ -140,6 +136,7 @@ def pixpy_app(sschedule, config_vars, shutter):
                 wait_time_until_next_interval_s = 0
             sleep(wait_time_until_next_interval_s)
         else:
+            next_sample_start_check = sschedule.current_sample_start()
             x = np.arange(0, 160)
             y = np.flip(np.arange(0, 120))
             
@@ -176,6 +173,8 @@ def pixpy_app(sschedule, config_vars, shutter):
                               't_b_snapshot': {'zlib': True, "complevel": 5},
                               'nsamples': {'zlib': True, "complevel": 5},
                               })
+            if (next_sample_start_check < datetime.utcnow()):
+                print("missed first sample due to writing data to disk")
 
 
 # todo - wrap in try catch and redo usb_init as appropriate
