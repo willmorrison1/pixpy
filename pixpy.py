@@ -59,7 +59,7 @@ class Shutter:
     cycle_time: timedelta = None
     triggers: int = 0
     
-    def trigger(self):
+    def trigger(self, sleep=True):
         trigger_start_time = datetime.utcnow()
         if (trigger_start_time - self.last_trigger_time) > self.min_trigger_interval:
             self.last_trigger_result = trigger_shutter_flag()

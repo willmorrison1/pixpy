@@ -56,25 +56,27 @@ def get_file_name(sschedule, sn):
     return str(sn) + \
         str(file_end_raw).replace("-", "").replace(":", "").replace(" ", "") 
 
-def pixpy_app():
+def pixpy_app(sschedule, config_vars, shutter):
     
-    sschedule, config_vars, shutter = app_setup()
     print(sschedule)
     
     # number of frames to skip after shutter
     skip_frames_after_shutter_delay_s = (
         skip_frames_after_shutter_delay / config_vars['fps']
         ) 
-    pre_sample_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
+    pre_interval_delay_s = shutter_delay + skip_frames_after_shutter_delay_s
 
     width, height = pixpy.get_thermal_image_size()
     sample_timesteps_remaining = sschedule.sample_timesteps_remaining()
     print(datetime.utcnow())
     print(sample_timesteps_remaining)
-    file_interval_s = sschedule.file_interval.total_seconds()
+    print(f'pre_interval_delay_s {pre_interval_delay_s}')
+    sample_interval_s = sschedule.sample_interval.total_seconds()
+    print(f'sample_interval_s {sample_interval_s}')
     file_name = get_file_name(sschedule, config_vars['sn'])
     
     time_timeseries = np.empty(sample_timesteps_remaining)
+    image_snapshot_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
     image_median_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
     image_min_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
     image_max_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
@@ -86,16 +88,21 @@ def pixpy_app():
     counterHW_timeseries = np.empty(sample_timesteps_remaining, dtype=np.longlong)
     fps_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
     nsamples_timeseries = np.empty(sample_timesteps_remaining, dtype=int)
-    n_images = int((file_interval_s * config_vars['fps']) + 0.5)
+    n_images = int((sample_interval_s * config_vars['fps']) + 0.5)
+    print(f'n_images {n_images}')
+    print(f"fps {config_vars['fps']}")
+    
     time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
+    print(f'time_until_next_interval {time_until_next_interval}')
     while time_until_next_interval.total_seconds() < 0:
         time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
     print(f"sleeping for {time_until_next_interval.total_seconds()}")
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
-        shutter.trigger()
+        print(f'started n_interval_timestep {j + 1} / {sample_timesteps_remaining} at {datetime.utcnow()}')        
+        shutter.trigger(sleep=True)
         sleep(skip_frames_after_shutter_delay_s)
-        print(f'started n_interval_timestep {j + 1} / {sample_timesteps_remaining} at {datetime.utcnow()}')
+        print(f'waited for shutter until {datetime.utcnow()}')        
         interval_start_time = datetime.utcnow()
         images_raw = np.empty((n_images, height, width), dtype=np.uint16)
         for i in range(0, n_images):
@@ -106,6 +113,7 @@ def pixpy_app():
         print(f'interval has timestamp {interval_end_time}')
         dtime = interval_end_time - interval_start_time
         fps = n_images / dtime.total_seconds()
+        image_snapshot_timeseries[j, :, :] = image
         image_median_timeseries[j, :, :] = np.median(images_raw, axis=0)
         image_min_timeseries[j, :, :] = np.min(images_raw, axis=0)
         image_max_timeseries[j, :, :] = np.max(images_raw, axis=0)
@@ -121,13 +129,15 @@ def pixpy_app():
         if j != (sample_timesteps_remaining - 1):
             next_interval_time = interval_start_time + sschedule.sample_repetition
             current_time = datetime.utcnow()
-            wait_time_until_next_interval_s = (next_interval_time - 
-                                               current_time).total_seconds()
+            wait_time_until_next_interval_s = (
+                next_interval_time - current_time
+                ).total_seconds() - pre_interval_delay_s
+                
             print(f'Time until next interval: {wait_time_until_next_interval_s}')
             if wait_time_until_next_interval_s < 0:
                 print("Next interval start time missed. Slow the sampling rate and/or fps.")
                 wait_time_until_next_interval_s = 0
-            sleep(wait_time_until_next_interval_s - pre_sample_delay_s)
+            sleep(wait_time_until_next_interval_s)
         else:
             x = np.arange(0, 160)
             y = np.flip(np.arange(0, 120))
@@ -138,7 +148,7 @@ def pixpy_app():
                     t_b_min=(["time", "y", "x"], image_min_timeseries),
                     t_b_max=(["time", "y", "x"], image_max_timeseries),
                     t_b_std=(["time", "y", "x"], image_std_timeseries),
-                    t_b_snapshot=(["time", "y", "x"], image),
+                    t_b_snapshot=(["time", "y", "x"], image_snapshot_timeseries),
                     t_box=(["time"], tbox_timeseries),
                     t_chip=(["time"], tchip_timeseries),
                     flag_state=(["time"], flagstate_timeseries),
@@ -153,21 +163,22 @@ def pixpy_app():
                     time=[datetime.utcfromtimestamp(i) for i in time_timeseries],
                 ),
                 attrs=dict(description="pixpy",
-                           serial=config_vars['sn']),
+                            serial=config_vars['sn']),
             )
             ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'), 
-                         encoding={
-                             'time': {'dtype': 'i4'}, 
-                             't_b_median': {'zlib': True, "complevel": 5},
-                             't_b_min': {'zlib': True, "complevel": 5},
-                             't_b_max': {'zlib': True, "complevel": 5},
-                             't_b_std': {'zlib': True, "complevel": 5},
-                             't_b_snapshot': {'zlib': True, "complevel": 5},
-                             'nsamples': {'zlib': True, "complevel": 5},
-                             })
+                          encoding={
+                              'time': {'dtype': 'i4'}, 
+                              't_b_median': {'zlib': True, "complevel": 5},
+                              't_b_min': {'zlib': True, "complevel": 5},
+                              't_b_max': {'zlib': True, "complevel": 5},
+                              't_b_std': {'zlib': True, "complevel": 5},
+                              't_b_snapshot': {'zlib': True, "complevel": 5},
+                              'nsamples': {'zlib': True, "complevel": 5},
+                              })
 
 
 # todo - wrap in try catch and redo usb_init as appropriate
 if __name__ == "__main__":
+    sschedule, config_vars, shutter = app_setup()
     while True:
-        pixpy_app()
+        pixpy_app(sschedule, config_vars, shutter)
