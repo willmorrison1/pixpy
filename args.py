@@ -16,7 +16,7 @@ parser.add_argument(
     )
 parser.add_argument(
     '--sample_interval',
-    type=int, 
+    type=float, 
     help='The time period covered by a sample (seconds)', 
     default=5,
     )
