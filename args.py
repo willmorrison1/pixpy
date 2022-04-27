@@ -21,7 +21,7 @@ parser.add_argument(
     default=5,
     )
 parser.add_argument(
-    '--sample_resolution',
+    '--sample_repetition',
     type=int, 
     help='The length of time between samples (seconds)',
     default=60,

@@ -26,7 +26,7 @@ def app_setup():
     sschedule = pixpy.SnapshotSchedule(
         file_interval=timedelta(seconds=args.file_interval),
         sample_interval=timedelta(seconds=args.sample_interval),
-        sample_resolution=timedelta(args.sample_resolution),
+        sample_repetition=timedelta(seconds=args.sample_repetition),
         )
     shutter = pixpy.Shutter()
     
@@ -59,6 +59,7 @@ def get_file_name(sschedule, sn):
 def pixpy_app():
     
     sschedule, config_vars, shutter = app_setup()
+    print(sschedule)
     
     # number of frames to skip after shutter
     skip_frames_after_shutter_delay_s = (
@@ -89,6 +90,7 @@ def pixpy_app():
     time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
     while time_until_next_interval.total_seconds() < 0:
         time_until_next_interval = sschedule.current_sample_start() - datetime.utcnow()
+    print(f"sleeping for {time_until_next_interval.total_seconds()}")
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
         shutter.trigger()
@@ -117,7 +119,7 @@ def pixpy_app():
         fps_timeseries[j] = fps
         nsamples_timeseries[j] = n_images
         if j != (sample_timesteps_remaining - 1):
-            next_interval_time = interval_start_time + sschedule.sample_resolution
+            next_interval_time = interval_start_time + sschedule.sample_repetition
             current_time = datetime.utcnow()
             wait_time_until_next_interval_s = (next_interval_time - 
                                                current_time).total_seconds()

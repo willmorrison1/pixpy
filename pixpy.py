@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from dataclasses import dataclass
 from pandas import to_datetime, Timestamp
-import ctypes as ctps
+import ctypes
 from ctypes import util as ctypes_util
 from os import name as os_name
 from time import sleep
@@ -11,28 +11,28 @@ from enum import Enum
 
 if os_name == 'nt':
     # windows
-    lib = ctps.CDLL('x64/libirimager.dll')
+    lib = ctypes.CDLL('x64/libirimager.dll')
 else:
     # linux
-    lib = ctps.cdll.LoadLibrary(ctypes_util.find_library('irdirectsdk'))
+    lib = ctypes.cdll.LoadLibrary(ctypes_util.find_library('irdirectsdk'))
         
 @dataclass(frozen=True) # todo: docstr
 class SnapshotScheduleParameters:
     file_interval: timedelta = timedelta(seconds=300)
     sample_interval: timedelta = timedelta(seconds=5)
-    sample_resolution: timedelta = timedelta(seconds=60)
+    sample_repetition: timedelta = timedelta(seconds=60)
     
-    if sample_resolution <= sample_interval:
-        raise ValueError('sample_resolution <= sample_interval')
+    if sample_repetition <= sample_interval:
+        raise ValueError('sample_repetition <= sample_interval')
     if file_interval <= sample_interval:
         raise ValueError('file_interval <= sample_interval')
-    if file_interval <= sample_resolution:
-        raise ValueError("file_interval <= sample_resolution")
+    if file_interval <= sample_repetition:
+        raise ValueError("file_interval <= sample_repetition")
     
 class SnapshotSchedule(SnapshotScheduleParameters):
     def next_snapshot(self) -> Timestamp:
-        time_now_offset = datetime.utcnow() + (self.sample_resolution / 2)
-        return to_datetime(time_now_offset).round(self.sample_resolution)
+        time_now_offset = datetime.utcnow() + (self.sample_repetition / 2)
+        return to_datetime(time_now_offset).round(self.sample_repetition)
     
     def current_sample_start(self) -> Timestamp:
         return self.next_snapshot() - self.sample_interval
@@ -47,7 +47,7 @@ class SnapshotSchedule(SnapshotScheduleParameters):
     def sample_timesteps_remaining(self) -> int:
         final_snapshot = self.current_file_time_end()
         n_samples = int((final_snapshot - datetime.utcnow() + \
-                         self.sample_interval) / self.sample_resolution)
+                         self.sample_interval) / self.sample_repetition)
         return n_samples
 
 # todo: make min_trigger_interval the only settable parameter
@@ -72,16 +72,16 @@ class ShutterMode(Enum):
     MANUAL = 0
     AUTO = 1
 
-class EvoIRFrameMetadata(ctps.Structure):
+class EvoIRFrameMetadata(ctypes.Structure):
     _fields_ = [
-        ("counter", ctps.c_uint),
-        ("counterHW", ctps.c_uint),
-        ("timestamp", ctps.c_longlong),
-        ("timestampMedia", ctps.c_longlong),
-        ("flagState", ctps.c_uint),
-        ("tempChip", ctps.c_float),
-        ("tempFlag", ctps.c_float),
-        ("tempBox", ctps.c_float),
+        ("counter", ctypes.c_uint),
+        ("counterHW", ctypes.c_uint),
+        ("timestamp", ctypes.c_longlong),
+        ("timestampMedia", ctypes.c_longlong),
+        ("flagState", ctypes.c_uint),
+        ("tempChip", ctypes.c_float),
+        ("tempFlag", ctypes.c_float),
+        ("tempBox", ctypes.c_float),
         ]
     def __repr__(self):
         out = (
@@ -104,32 +104,32 @@ def usb_init(xml_config: str, formats_def: str = None,
         None if log_file is None else log_file.encode())
 
 def get_thermal_image_size() -> (int, int):
-    width = ctps.c_int()
-    height = ctps.c_int()
-    _ = lib.evo_irimager_get_thermal_image_size(ctps.byref(width), 
-                                                ctps.byref(height))
+    width = ctypes.c_int()
+    height = ctypes.c_int()
+    _ = lib.evo_irimager_get_thermal_image_size(ctypes.byref(width), 
+                                                ctypes.byref(height))
     return width.value, height.value
 
 def get_palette_image_size() -> (int, int):
-    width = ctps.c_int()
-    height = ctps.c_int()
-    _ = lib.evo_irimager_get_palette_image_size(ctps.byref(width), 
-                                                ctps.byref(height))
+    width = ctypes.c_int()
+    height = ctypes.c_int()
+    _ = lib.evo_irimager_get_palette_image_size(ctypes.byref(width), 
+                                                ctypes.byref(height))
     return width.value, height.value
 
 def get_thermal_image(width: int, height: int) -> np.ndarray:
-    w = ctps.byref(ctps.c_int(width))
-    h = ctps.byref(ctps.c_int(height))
+    w = ctypes.byref(ctypes.c_int(width))
+    h = ctypes.byref(ctypes.c_int(height))
     thermalData = np.empty((height, width), dtype=np.uint16)
-    thermalDataPointer = thermalData.ctps.data_as(ctps.POINTER(ctps.c_ushort))
+    thermalDataPointer = thermalData.ctypes.data_as(ctypes.POINTER(ctypes.c_ushort))
     _ = lib.evo_irimager_get_thermal_image(w, h, thermalDataPointer)
     return thermalData
 
 def get_palette_image(width: int, height: int) -> np.ndarray:
-    w = ctps.byref(ctps.c_int(width))
-    h = ctps.byref(ctps.c_int(height))
+    w = ctypes.byref(ctypes.c_int(width))
+    h = ctypes.byref(ctypes.c_int(height))
     paletteData = np.empty((height, width, 3), dtype=np.uint8)
-    paletteDataPointer = paletteData.ctps.data_as(ctps.POINTER(ctps.c_ubyte))
+    paletteDataPointer = paletteData.ctypes.data_as(ctypes.POINTER(ctypes.c_ubyte))
     retVal = -1
     while retVal != 0:
         retVal = lib.evo_irimager_get_palette_image(w, h, paletteDataPointer)
@@ -139,8 +139,8 @@ def terminate() -> int:
     return lib.evo_irimager_terminate()
 
 def get_serial() -> int:
-    s = ctps.c_int()
-    _ = lib.evo_irimager_get_serial(ctps.byref(s))
+    s = ctypes.c_int()
+    _ = lib.evo_irimager_get_serial(ctypes.byref(s))
     return s.value
     
 def set_shutter_mode(shutterMode: ShutterMode) -> int:
@@ -154,12 +154,12 @@ def set_temperature_range(min: int, max: int) -> int:
 
 def get_thermal_image_metadata(width: int, height: int) -> (np.ndarray, 
                                                             EvoIRFrameMetadata):
-    w = ctps.byref(ctps.c_int(width))
-    h = ctps.byref(ctps.c_int(height))
+    w = ctypes.byref(ctypes.c_int(width))
+    h = ctypes.byref(ctypes.c_int(height))
     data = np.empty((height, width), dtype=np.uint16)
-    data_pointer = data.ctps.data_as(ctps.POINTER(ctps.c_ushort))
+    data_pointer = data.ctypes.data_as(ctypes.POINTER(ctypes.c_ushort))
     meta = EvoIRFrameMetadata()
-    meta_pointer = ctps.pointer(meta)
+    meta_pointer = ctypes.pointer(meta)
     _ = lib.evo_irimager_get_thermal_image_metadata(
         w, h, data_pointer, meta_pointer)
     return data, meta
