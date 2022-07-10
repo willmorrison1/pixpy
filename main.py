@@ -47,6 +47,36 @@ def get_file_name(ssched, sn):
         str(file_end_raw).replace("-", "").replace(":", "").replace(" ", "")
 
 
+def preallocate_image_timeseries(x, y, t):
+    return np.empty(
+        [t, x, y],
+        dtype=[
+            ('snapshot', np.uint16),
+            ('median', np.uint16),
+            ('min', np.uint16),
+            ('max', np.uint16),
+            ('std', np.uint16),
+            ('median', np.uint16),
+            ]
+        )
+
+
+def preallocate_meta_timeseries(x, y, t):
+    return np.empty(
+        [t],
+        dtype=[
+            ('time', np.uint16),
+            ('tbox', np.uint16),
+            ('tchip', np.uint16),
+            ('flag_state', np.uint16),
+            ('counter', np.uint16),
+            ('counterHW', np.uint16),
+            ('fps', np.uint16),
+            ('n_images', np.uint16),
+            ]
+        )
+
+
 def pixpy_app(ssched, config_vars, shutter):
     print(ssched)
     width, height = pixpy.get_thermal_image_size()
@@ -57,20 +87,10 @@ def pixpy_app(ssched, config_vars, shutter):
     sample_interval_s = ssched.sample_interval.total_seconds()
     print(f'sample_interval_s {sample_interval_s}')
     file_name = get_file_name(ssched, config_vars['sn'])
-    time_timeseries = np.empty(sample_timesteps_remaining)
     # todo: change to just one 4D array with x, y, time, variable
-    image_snapshot_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
-    image_median_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
-    image_min_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
-    image_max_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
-    image_std_timeseries = np.empty((sample_timesteps_remaining, height, width), dtype=np.uint16)
-    tbox_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
-    tchip_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
-    flagstate_timeseries = np.empty(sample_timesteps_remaining, dtype=int)
-    counter_timeseries = np.empty(sample_timesteps_remaining, dtype=np.longlong)
-    counterHW_timeseries = np.empty(sample_timesteps_remaining, dtype=np.longlong)
-    fps_timeseries = np.empty(sample_timesteps_remaining, dtype=float)
-    nsamples_timeseries = np.empty(sample_timesteps_remaining, dtype=int)
+    image_timeseries = preallocate_image_timeseries(
+        height, width, sample_timesteps_remaining)
+    meta_timeseries = preallocate_meta_timeseries(sample_timesteps_remaining)
     n_images = int((sample_interval_s * config_vars['fps']) + 0.5)
     print(f'n_images {n_images}')
     print(f"fps {config_vars['fps']}")
@@ -101,19 +121,19 @@ def pixpy_app(ssched, config_vars, shutter):
         print(f'interval has timestamp {interval_end_time}')
         dtime = interval_end_time - interval_start_time
         fps = n_images / dtime.total_seconds()
-        image_snapshot_timeseries[j, :, :] = image
-        image_median_timeseries[j, :, :] = np.median(images_raw, axis=0)
-        image_min_timeseries[j, :, :] = np.min(images_raw, axis=0)
-        image_max_timeseries[j, :, :] = np.max(images_raw, axis=0)
-        image_std_timeseries[j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
-        time_timeseries[j] = interval_end_time.timestamp()
-        tbox_timeseries[j] = meta.tempBox
-        tchip_timeseries[j] = meta.tempChip
-        flagstate_timeseries[j] = meta.flagState
-        counter_timeseries[j] = meta.counter
-        counterHW_timeseries[j] = meta.counterHW
-        fps_timeseries[j] = fps
-        nsamples_timeseries[j] = n_images
+        image_timeseries['snapshot'][j, :, :] = image
+        image_timeseries['median'][j, :, :] = np.median(images_raw, axis=0)
+        image_timeseries['min'][j, :, :] = np.min(images_raw, axis=0)
+        image_timeseries['max'][j, :, :] = np.max(images_raw, axis=0)
+        image_timeseries['std'][j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
+        meta_timeseries['time'][j] = interval_end_time.timestamp()
+        meta_timeseries['tbox'][j] = meta.tempBox
+        meta_timeseries['tchip'][j] = meta.tempChip
+        meta_timeseries['flag_state'][j] = meta.flagState
+        meta_timeseries['counter'][j] = meta.counter
+        meta_timeseries['counterCW'][j] = meta.counterHW
+        meta_timeseries['fps'][j] = fps
+        meta_timeseries['n_images'][j] = n_images
         if j != (sample_timesteps_remaining - 1):
             next_interval_time = interval_start_time + ssched.sample_repetition
             current_time = dt.utcnow()
@@ -132,23 +152,23 @@ def pixpy_app(ssched, config_vars, shutter):
             y = np.flip(np.arange(0, 120))
             ds = xr.Dataset(
                 data_vars=dict(
-                    t_b_median=(["time", "y", "x"], image_median_timeseries),
-                    t_b_min=(["time", "y", "x"], image_min_timeseries),
-                    t_b_max=(["time", "y", "x"], image_max_timeseries),
-                    t_b_std=(["time", "y", "x"], image_std_timeseries),
-                    t_b_snapshot=(["time", "y", "x"], image_snapshot_timeseries),
-                    t_box=(["time"], tbox_timeseries),
-                    t_chip=(["time"], tchip_timeseries),
-                    flag_state=(["time"], flagstate_timeseries),
-                    counter=(["time"], counter_timeseries),
-                    counterHW=(["time"], counterHW_timeseries),
-                    fps=(["time"], fps_timeseries),
-                    nsamples=(["time"], nsamples_timeseries),
+                    t_b_median=(["time", "y", "x"], image_timeseries['median']),
+                    t_b_min=(["time", "y", "x"], image_timeseries['min']),
+                    t_b_max=(["time", "y", "x"], image_timeseries['max']),
+                    t_b_std=(["time", "y", "x"], image_timeseries['std']),
+                    t_b_snapshot=(["time", "y", "x"], image_timeseries['snapshot']),
+                    t_box=(["time"], meta_timeseries['tbox']),
+                    t_chip=(["time"], meta_timeseries['tchip']),
+                    flag_state=(["time"], meta_timeseries['flag_state']),
+                    counter=(["time"], meta_timeseries['counter']),
+                    counterHW=(["time"], meta_timeseries['counterHW']),
+                    fps=(["time"], meta_timeseries['fps']),
+                    nsamples=(["time"], meta_timeseries['n_samples']),
                 ),
                 coords=dict(
                     x=x,
                     y=y,
-                    time=[dt.utcfromtimestamp(i) for i in time_timeseries],
+                    time=[dt.utcfromtimestamp(i) for i in meta_timeseries['time']],
                 ),
                 attrs=dict(description="pixpy", serial=config_vars['sn']),
             )
