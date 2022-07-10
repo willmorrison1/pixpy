@@ -52,23 +52,24 @@ class SnapshotSchedule(SnapshotScheduleParameters):
                          self.sample_interval) / self.sample_repetition)
         return n_samples
 
+
 # todo: make min_trigger_interval the only settable parameter
 @dataclass()
 class Shutter:
-    last_trigger_result: int = None
-    last_trigger_time: int = datetime.utcnow() - timedelta(days=365)
+    _last_trigger_result: int = None
+    _last_trigger_time: int = datetime.utcnow() - timedelta(days=365)
     min_trigger_interval: timedelta = timedelta(seconds=15)
-    cycle_time: timedelta = None
-    triggers: int = 0
+    _cycle_time: timedelta = None
+    _triggers: int = 0
 
     def trigger(self, sleep=True):
         trigger_start_time = datetime.utcnow()
-        if (trigger_start_time - self.last_trigger_time) > self.min_trigger_interval:
-            self.last_trigger_result = trigger_shutter_flag()
+        if (trigger_start_time - self._last_trigger_time) > self.min_trigger_interval:
+            self._last_trigger_result = trigger_shutter_flag()
             trigger_end_time = datetime.utcnow()
-            self.last_trigger_time = trigger_end_time
-            self.cycle_time = trigger_end_time - trigger_start_time
-            self.triggers += 1
+            self._last_trigger_time = trigger_end_time
+            self.cycle_cycle_time_time = trigger_end_time - trigger_start_time
+            self._triggers += 1
             return 0
         else:
             return -1
