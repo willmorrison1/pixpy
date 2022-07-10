@@ -53,7 +53,6 @@ class SnapshotSchedule(SnapshotScheduleParameters):
         return n_samples
 
 
-# todo: make min_trigger_interval the only settable parameter
 @dataclass()
 class Shutter:
     _last_trigger_result: int = None
