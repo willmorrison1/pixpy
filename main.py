@@ -71,7 +71,7 @@ def preallocate_meta_timeseries(t):
             ('counter', np.uint16),
             ('counterHW', np.uint16),
             ('fps', np.uint16),
-            ('n_images', np.uint16),
+            ('n_samples', np.uint16),
             ]
         )
 
