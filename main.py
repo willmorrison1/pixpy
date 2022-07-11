@@ -64,12 +64,12 @@ def preallocate_meta_timeseries(t):
         [t],
         dtype=[
             ('time', np.uint32),
-            ('tbox', np.uint16),
-            ('tchip', np.uint16),
+            ('tbox', float),
+            ('tchip', float),
             ('flag_state', np.uint16),
-            ('counter', np.uint16),
-            ('counterHW', np.uint16),
-            ('fps', np.uint16),
+            ('counter', np.uint32),
+            ('counterHW', np.uint32),
+            ('fps', float),
             ('n_images', np.uint16),
             ]
         )
