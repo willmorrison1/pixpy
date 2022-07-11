@@ -10,7 +10,6 @@ from os import path
 shutter_delay = 0.3  # assumed
 skip_frames_after_shutter_delay = 2
 
-
 def get_config_vars(config_file):
     tree = ET.parse(config_file)
     fps_config = int(float(tree.getroot().find('framerate').text))
@@ -64,7 +63,7 @@ def preallocate_meta_timeseries(t):
     return np.empty(
         [t],
         dtype=[
-            ('time', np.uint16),
+            ('time', np.uint32),
             ('tbox', np.uint16),
             ('tchip', np.uint16),
             ('flag_state', np.uint16),
@@ -102,6 +101,8 @@ def pixpy_app(ssched, config_vars, shutter):
     print(f"sleeping for {time_until_next_interval.total_seconds()}")
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
+        dt_epoch = dt.utcnow().replace(minute=0, hour=0, second=0, microsecond=0)
+        dt_epoch_ms = dt_epoch.timestamp() * 1000
         print(
                 f'started n_interval_timestep {j + 1} / '
                 f'{sample_timesteps_remaining} at {dt.utcnow()}'
@@ -125,7 +126,7 @@ def pixpy_app(ssched, config_vars, shutter):
         image_timeseries['min'][j, :, :] = np.min(images_raw, axis=0)
         image_timeseries['max'][j, :, :] = np.max(images_raw, axis=0)
         image_timeseries['std'][j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
-        meta_timeseries['time'][j] = interval_end_time.timestamp()
+        meta_timeseries['time'][j] = (interval_end_time.timestamp() * 1000) - dt_epoch_ms
         meta_timeseries['tbox'][j] = meta.tempBox
         meta_timeseries['tchip'][j] = meta.tempChip
         meta_timeseries['flag_state'][j] = meta.flagState
@@ -139,7 +140,7 @@ def pixpy_app(ssched, config_vars, shutter):
             wait_time_until_next_interval_s = (
                 next_interval_time - current_time
                 ).total_seconds() - shutter_delay
-            print(f'Next interval in: {wait_time_until_next_interval_s} s.')
+            print(f'Next interval in: {wait_time_until_next_interval_s} s')
             if wait_time_until_next_interval_s < 0:
                 # todo: send to log file
                 print("Next interval missed. Slow the sampling rate/fps.")
@@ -167,13 +168,15 @@ def pixpy_app(ssched, config_vars, shutter):
                 coords=dict(
                     x=x,
                     y=y,
-                    time=[dt.utcfromtimestamp(i) for i in meta_timeseries['time']],
+                    time=meta_timeseries['time'],
                 ),
                 attrs=dict(description="pixpy", serial=config_vars['sn']),
             )
+            ds.time.attrs['units'] = dt_epoch.strftime('milliseconds since %Y-%m-%d %H:%M:%S')
+
             ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'),
                          encoding={
-                              'time': {'dtype': 'i4'},
+                              'time': {'dtype': 'i4', 'zlib': True, "complevel": 5},
                               't_b_median': {'zlib': True, "complevel": 5},
                               't_b_min': {'zlib': True, "complevel": 5},
                               't_b_max': {'zlib': True, "complevel": 5},
@@ -182,7 +185,7 @@ def pixpy_app(ssched, config_vars, shutter):
                               'n_images': {'zlib': True, "complevel": 5},
                               })
             if (next_sample_start_check < dt.utcnow()):
-                print("missed first sample due to writing data to disk")
+                print("missed sample: i/o blocking")
 
 
 # todo - wrap in try catch and redo usb_init as appropriate
