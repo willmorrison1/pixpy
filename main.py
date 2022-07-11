@@ -71,7 +71,7 @@ def preallocate_meta_timeseries(t):
             ('counter', np.uint16),
             ('counterHW', np.uint16),
             ('fps', np.uint16),
-            ('n_samples', np.uint16),
+            ('n_images', np.uint16),
             ]
         )
 
@@ -162,7 +162,7 @@ def pixpy_app(ssched, config_vars, shutter):
                     counter=(["time"], meta_timeseries['counter']),
                     counterHW=(["time"], meta_timeseries['counterHW']),
                     fps=(["time"], meta_timeseries['fps']),
-                    nsamples=(["time"], meta_timeseries['n_samples']),
+                    n_images=(["time"], meta_timeseries['n_images']),
                 ),
                 coords=dict(
                     x=x,
@@ -179,7 +179,7 @@ def pixpy_app(ssched, config_vars, shutter):
                               't_b_max': {'zlib': True, "complevel": 5},
                               't_b_std': {'zlib': True, "complevel": 5},
                               't_b_snapshot': {'zlib': True, "complevel": 5},
-                              'nsamples': {'zlib': True, "complevel": 5},
+                              'n_images': {'zlib': True, "complevel": 5},
                               })
             if (next_sample_start_check < dt.utcnow()):
                 print("missed first sample due to writing data to disk")
