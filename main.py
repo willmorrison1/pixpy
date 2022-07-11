@@ -131,7 +131,7 @@ def pixpy_app(ssched, config_vars, shutter):
         meta_timeseries['tchip'][j] = meta.tempChip
         meta_timeseries['flag_state'][j] = meta.flagState
         meta_timeseries['counter'][j] = meta.counter
-        meta_timeseries['counterCW'][j] = meta.counterHW
+        meta_timeseries['counterHW'][j] = meta.counterHW
         meta_timeseries['fps'][j] = fps
         meta_timeseries['n_images'][j] = n_images
         if j != (sample_timesteps_remaining - 1):
