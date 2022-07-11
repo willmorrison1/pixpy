@@ -56,12 +56,11 @@ def preallocate_image_timeseries(x, y, t):
             ('min', np.uint16),
             ('max', np.uint16),
             ('std', np.uint16),
-            ('median', np.uint16),
             ]
         )
 
 
-def preallocate_meta_timeseries(x, y, t):
+def preallocate_meta_timeseries(t):
     return np.empty(
         [t],
         dtype=[
@@ -108,7 +107,7 @@ def pixpy_app(ssched, config_vars, shutter):
                 f'{sample_timesteps_remaining} at {dt.utcnow()}'
               )
         shutter.trigger()
-        print(f'shutter triggered {shutter.triggers} times')
+        print(f'shutter triggered {shutter._triggers} times')
         sleep(shutter_delay)
         print(f'waited for shutter until {dt.utcnow()}')
         interval_start_time = dt.utcnow()
