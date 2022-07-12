@@ -21,11 +21,7 @@ def get_config_vars(config_file):
 
 
 def app_setup():
-    ssched = pixpy.SnapshotSchedule(
-        file_interval=timedelta(seconds=args.file_interval),
-        sample_interval=timedelta(seconds=args.sample_interval),
-        sample_repetition=timedelta(seconds=args.sample_repetition),
-        )
+
     shutter = pixpy.Shutter()
     config_vars = get_config_vars(args.config_file)
     pixpy.usb_init_retry(args.config_file)
@@ -37,7 +33,7 @@ def app_setup():
     pixpy.set_shutter_mode(0)
     shutter.trigger()
     sleep(shutter_delay * 2)
-    return ssched, config_vars, shutter
+    return config_vars, shutter
 
 
 def get_file_name(ssched, sn):
@@ -75,8 +71,12 @@ def preallocate_meta_timeseries(t):
         )
 
 
-def pixpy_app(ssched, config_vars, shutter):
-    print(ssched)
+def pixpy_app(config_vars, shutter):
+    ssched = pixpy.SnapshotSchedule(
+        file_interval=timedelta(seconds=args.file_interval),
+        sample_interval=timedelta(seconds=args.sample_interval),
+        sample_repetition=timedelta(seconds=args.sample_repetition),
+        )
     width, height = pixpy.get_thermal_image_size()
     sample_timesteps_remaining = ssched.sample_timesteps_remaining()
     print(dt.utcnow())
@@ -101,7 +101,7 @@ def pixpy_app(ssched, config_vars, shutter):
     print(f"sleeping for {time_until_next_interval.total_seconds()}")
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
-        dt_epoch = dt.utcnow().replace(minute=0, hour=0, second=0, microsecond=0)
+        dt_epoch = ssched.current_sample_start().replace(minute=0, hour=0, second=0, microsecond=0)
         dt_epoch_ms = dt_epoch.timestamp() * 1000
         print(
                 f'started n_interval_timestep {j + 1} / '
@@ -190,6 +190,6 @@ def pixpy_app(ssched, config_vars, shutter):
 
 # todo - wrap in try catch and redo usb_init as appropriate
 if __name__ == "__main__":
-    ssched, config_vars, shutter = app_setup()
+    config_vars, shutter = app_setup()
     while True:
-        pixpy_app(ssched, config_vars, shutter)
+        pixpy_app(config_vars, shutter)
