@@ -152,13 +152,13 @@ def pixpy_app(config_vars, shutter):
             y = np.flip(np.arange(0, 120))
             ds = xr.Dataset(
                 data_vars=dict(
-                    t_b_median=(["time", "y", "x"], image_timeseries['median'], {"units": "K", "long_name": "brightness_temperature_median"}),
-                    t_b_min=(["time", "y", "x"], image_timeseries['min'], {"units": "K", "long_name": "brightness_temperature_min"}),
-                    t_b_max=(["time", "y", "x"], image_timeseries['max'], {"units": "K", "long_name": "brightness_temperature_max"}),
-                    t_b_std=(["time", "y", "x"], image_timeseries['std'], {"units": "K", "long_name": "brightness_temperature_standard_deviation"}),
-                    t_b_snapshot=(["time", "y", "x"], image_timeseries['snapshot'], {"units": "K", "long_name": "brightness_temperature_snapshot"}),
-                    t_box=(["time"], meta_timeseries['tbox'], {"units": "degC", "long_name": "camera_body_temperature"}),
-                    t_chip=(["time"], meta_timeseries['tchip'], {"units": "degC", "long_name": "focal_plane_array_chip_temperature"}),
+                    t_b_median=(["time", "y", "x"], image_timeseries['median'], {"units": "celsius", "long_name": "brightness_temperature_median"}),
+                    t_b_min=(["time", "y", "x"], image_timeseries['min'], {"units": "celsius", "long_name": "brightness_temperature_min"}),
+                    t_b_max=(["time", "y", "x"], image_timeseries['max'], {"units": "celsius", "long_name": "brightness_temperature_max"}),
+                    t_b_std=(["time", "y", "x"], image_timeseries['std'], {"units": "celsius", "long_name": "brightness_temperature_standard_deviation"}),
+                    t_b_snapshot=(["time", "y", "x"], image_timeseries['snapshot'], {"units": "celsius", "long_name": "brightness_temperature_snapshot"}),
+                    t_box=(["time"], meta_timeseries['tbox'], {"units": "celsius", "long_name": "camera_body_temperature"}),
+                    t_chip=(["time"], meta_timeseries['tchip'], {"units": "celsius", "long_name": "focal_plane_array_chip_temperature"}),
                     flag_state=(["time"], meta_timeseries['flag_state'], {"long_name": "flag_status"}),
                     counter=(["time"], meta_timeseries['counter'], {"long_name": "image_counter_from_software"}),
                     counterHW=(["time"], meta_timeseries['counterHW'], {"long_name": "image_counter_from_hardware"}),
@@ -170,14 +170,13 @@ def pixpy_app(config_vars, shutter):
                     y=y,
                     time=meta_timeseries['time'],
                 ),
-                attrs=dict(description="pixpy", serial=config_vars['sn']),
+                attrs=dict(description="pixpy", serial=config_vars['sn'], brightness_temperature_scaling="10", brightness_temperature_offset="1000"),
             )
             ds.x.attrs['long_name'] = 'pixels_along_x_axis'
             ds.y.attrs['long_name'] = 'pixels_along_y_axis'
             ds.time.attrs['units'] = dt_epoch.strftime('milliseconds since %Y-%m-%d')
             ds.time.attrs['long_name'] = 'time'
             ds.time.attrs['standard_name'] = 'time'
-            ds.time.attrs['calendar'] = 'gregorian'
 
             # todo: set time fill value?
 
