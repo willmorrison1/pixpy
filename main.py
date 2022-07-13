@@ -6,9 +6,9 @@ import pixpy
 import numpy as np
 import xml.etree.ElementTree as ET
 from os import path
+from pathlib import Path
 
 shutter_delay = 0.3  # assumed
-skip_frames_after_shutter_delay = 2
 
 def get_config_vars(config_file):
     tree = ET.parse(config_file)
@@ -21,7 +21,7 @@ def get_config_vars(config_file):
 
 
 def app_setup():
-
+    Path(args.output_directory).mkdir(parents=True, exist_ok=True)
     shutter = pixpy.Shutter()
     config_vars = get_config_vars(args.config_file)
     pixpy.usb_init_retry(args.config_file)
@@ -59,7 +59,7 @@ def preallocate_meta_timeseries(t):
     return np.empty(
         [t],
         dtype=[
-            ('time', np.uint32),
+            ('time', float),
             ('tbox', float),
             ('tchip', float),
             ('flag_state', np.uint16),
@@ -101,8 +101,8 @@ def pixpy_app(config_vars, shutter):
     print(f"sleeping for {time_until_next_interval.total_seconds()}")
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
-        dt_epoch = ssched.current_sample_start().replace(minute=0, hour=0, second=0, microsecond=0)
-        dt_epoch_ms = dt_epoch.timestamp() * 1000
+        dt_epoch = ssched.current_sample_start().replace(day=1, minute=0, hour=0, second=0, microsecond=0)
+        dt_epoch_s = dt_epoch.timestamp()
         print(
                 f'started n_interval_timestep {j + 1} / '
                 f'{sample_timesteps_remaining} at {dt.utcnow()}'
@@ -126,7 +126,7 @@ def pixpy_app(config_vars, shutter):
         image_timeseries['min'][j, :, :] = np.min(images_raw, axis=0)
         image_timeseries['max'][j, :, :] = np.max(images_raw, axis=0)
         image_timeseries['std'][j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
-        meta_timeseries['time'][j] = (interval_end_time.timestamp() * 1000) - dt_epoch_ms
+        meta_timeseries['time'][j] = (interval_end_time.timestamp() - dt_epoch_s) * 1000
         meta_timeseries['tbox'][j] = meta.tempBox
         meta_timeseries['tchip'][j] = meta.tempChip
         meta_timeseries['flag_state'][j] = meta.flagState
@@ -152,18 +152,18 @@ def pixpy_app(config_vars, shutter):
             y = np.flip(np.arange(0, 120))
             ds = xr.Dataset(
                 data_vars=dict(
-                    t_b_median=(["time", "y", "x"], image_timeseries['median']),
-                    t_b_min=(["time", "y", "x"], image_timeseries['min']),
-                    t_b_max=(["time", "y", "x"], image_timeseries['max']),
-                    t_b_std=(["time", "y", "x"], image_timeseries['std']),
-                    t_b_snapshot=(["time", "y", "x"], image_timeseries['snapshot']),
-                    t_box=(["time"], meta_timeseries['tbox']),
-                    t_chip=(["time"], meta_timeseries['tchip']),
-                    flag_state=(["time"], meta_timeseries['flag_state']),
-                    counter=(["time"], meta_timeseries['counter']),
-                    counterHW=(["time"], meta_timeseries['counterHW']),
-                    fps=(["time"], meta_timeseries['fps']),
-                    n_images=(["time"], meta_timeseries['n_images']),
+                    t_b_median=(["time", "y", "x"], image_timeseries['median'], {"units": "K", "long_name": "brightness_temperature_median"}),
+                    t_b_min=(["time", "y", "x"], image_timeseries['min'], {"units": "K", "long_name": "brightness_temperature_min"}),
+                    t_b_max=(["time", "y", "x"], image_timeseries['max'], {"units": "K", "long_name": "brightness_temperature_max"}),
+                    t_b_std=(["time", "y", "x"], image_timeseries['std'], {"units": "K", "long_name": "brightness_temperature_standard_deviation"}),
+                    t_b_snapshot=(["time", "y", "x"], image_timeseries['snapshot'], {"units": "K", "long_name": "brightness_temperature_snapshot"}),
+                    t_box=(["time"], meta_timeseries['tbox'], {"units": "degC", "long_name": "camera_body_temperature"}),
+                    t_chip=(["time"], meta_timeseries['tchip'], {"units": "degC", "long_name": "focal_plane_array_chip_temperature"}),
+                    flag_state=(["time"], meta_timeseries['flag_state'], {"long_name": "flag_status"}),
+                    counter=(["time"], meta_timeseries['counter'], {"long_name": "image_counter_from_software"}),
+                    counterHW=(["time"], meta_timeseries['counterHW'], {"long_name": "image_counter_from_hardware"}),
+                    frames=(["time"], meta_timeseries['fps'], {"units": "s-1", "long_name": "frames_per_second"}),
+                    n_images=(["time"], meta_timeseries['n_images'], {"long_name": "number_of_images_in_interval"}),
                 ),
                 coords=dict(
                     x=x,
@@ -172,18 +172,26 @@ def pixpy_app(config_vars, shutter):
                 ),
                 attrs=dict(description="pixpy", serial=config_vars['sn']),
             )
-            ds.time.attrs['units'] = dt_epoch.strftime('milliseconds since %Y-%m-%d %H:%M:%S')
+            ds.x.attrs['long_name'] = 'pixels_along_x_axis'
+            ds.y.attrs['long_name'] = 'pixels_along_y_axis'
+            ds.time.attrs['units'] = dt_epoch.strftime('milliseconds since %Y-%m-%d')
+            ds.time.attrs['long_name'] = 'time'
+            ds.time.attrs['standard_name'] = 'time'
+            ds.time.attrs['calendar'] = 'gregorian'
+
+            # todo: set time fill value?
 
             ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'),
                          encoding={
-                              'time': {'dtype': 'i4', 'zlib': True, "complevel": 5},
+                              'time': {'zlib': True, "complevel": 5, '_FillValue': -999},
                               't_b_median': {'zlib': True, "complevel": 5},
                               't_b_min': {'zlib': True, "complevel": 5},
                               't_b_max': {'zlib': True, "complevel": 5},
                               't_b_std': {'zlib': True, "complevel": 5},
                               't_b_snapshot': {'zlib': True, "complevel": 5},
                               'n_images': {'zlib': True, "complevel": 5},
-                              })
+                              },
+                              unlimited_dims=["time"])
             if (next_sample_start_check < dt.utcnow()):
                 print("missed sample: i/o blocking")
 
