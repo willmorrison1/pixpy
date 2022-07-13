@@ -7,6 +7,7 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from os import path
 from pathlib import Path
+from gpiozero import CPUTemperature, LoadAverage
 
 shutter_delay = 0.3  # assumed
 
@@ -62,6 +63,8 @@ def preallocate_meta_timeseries(t):
             ('time', float),
             ('tbox', float),
             ('tchip', float),
+            ('tpi', float),
+            ('loadpi', float),
             ('flag_state', np.uint16),
             ('counter', np.uint32),
             ('counterHW', np.uint32),
@@ -134,6 +137,8 @@ def pixpy_app(config_vars, shutter):
         meta_timeseries['counterHW'][j] = meta.counterHW
         meta_timeseries['fps'][j] = fps
         meta_timeseries['n_images'][j] = n_images
+        meta_timeseries['tpi'][j] = CPUTemperature().temperature
+        meta_timeseries['loadpi'][j] = LoadAverage().load_average
         if j != (sample_timesteps_remaining - 1):
             next_interval_time = interval_start_time + ssched.sample_repetition
             current_time = dt.utcnow()
@@ -157,13 +162,15 @@ def pixpy_app(config_vars, shutter):
                     t_b_max=(["time", "y", "x"], image_timeseries['max'], {"units": "celsius", "long_name": "brightness_temperature_max"}),
                     t_b_std=(["time", "y", "x"], image_timeseries['std'], {"units": "celsius", "long_name": "brightness_temperature_standard_deviation"}),
                     t_b_snapshot=(["time", "y", "x"], image_timeseries['snapshot'], {"units": "celsius", "long_name": "brightness_temperature_snapshot"}),
-                    t_box=(["time"], meta_timeseries['tbox'], {"units": "celsius", "long_name": "camera_body_temperature"}),
-                    t_chip=(["time"], meta_timeseries['tchip'], {"units": "celsius", "long_name": "focal_plane_array_chip_temperature"}),
+                    t_box=(["time"], meta_timeseries['tbox'], {"units": "celsius", "long_name": "temperature_camera_body"}),
+                    t_chip=(["time"], meta_timeseries['tchip'], {"units": "celsius", "long_name": "temperature_focal_plane_array_chip"}),
                     flag_state=(["time"], meta_timeseries['flag_state'], {"long_name": "flag_status"}),
                     counter=(["time"], meta_timeseries['counter'], {"long_name": "image_counter_from_software"}),
                     counterHW=(["time"], meta_timeseries['counterHW'], {"long_name": "image_counter_from_hardware"}),
                     frames=(["time"], meta_timeseries['fps'], {"units": "s-1", "long_name": "frames_per_second"}),
                     n_images=(["time"], meta_timeseries['n_images'], {"long_name": "number_of_images_in_interval"}),
+                    t_cpu=(["time"], meta_timeseries['tpi'], {"long_name": "temperature_raspberry_pi_cpu"}),
+                    load_cpu=(["time"], meta_timeseries['loadpi'], {"long_name": "average_load_raspberry_pi_cpu"}),
                 ),
                 coords=dict(
                     x=x,
@@ -177,8 +184,6 @@ def pixpy_app(config_vars, shutter):
             ds.time.attrs['units'] = dt_epoch.strftime('milliseconds since %Y-%m-%d')
             ds.time.attrs['long_name'] = 'time'
             ds.time.attrs['standard_name'] = 'time'
-
-            # todo: set time fill value?
 
             ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'),
                          encoding={
