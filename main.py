@@ -7,7 +7,7 @@ import numpy as np
 import xml.etree.ElementTree as ET
 from os import path
 from pathlib import Path
-from gpiozero import CPUTemperature, LoadAverage
+from gpiozero import CPUTemperature
 
 shutter_delay = 0.3  # assumed
 
@@ -64,7 +64,6 @@ def preallocate_meta_timeseries(t):
             ('tbox', float),
             ('tchip', float),
             ('tpi', float),
-            ('loadpi', float),
             ('flag_state', np.uint16),
             ('counter', np.uint32),
             ('counterHW', np.uint32),
@@ -138,7 +137,6 @@ def pixpy_app(config_vars, shutter):
         meta_timeseries['fps'][j] = fps
         meta_timeseries['n_images'][j] = n_images
         meta_timeseries['tpi'][j] = CPUTemperature().temperature
-        meta_timeseries['loadpi'][j] = LoadAverage().load_average
         if j != (sample_timesteps_remaining - 1):
             next_interval_time = interval_start_time + ssched.sample_repetition
             current_time = dt.utcnow()
@@ -170,7 +168,6 @@ def pixpy_app(config_vars, shutter):
                     frames=(["time"], meta_timeseries['fps'], {"units": "s-1", "long_name": "frames_per_second"}),
                     n_images=(["time"], meta_timeseries['n_images'], {"long_name": "number_of_images_in_interval"}),
                     t_cpu=(["time"], meta_timeseries['tpi'], {"long_name": "temperature_raspberry_pi_cpu"}),
-                    load_cpu=(["time"], meta_timeseries['loadpi'], {"long_name": "average_load_raspberry_pi_cpu"}),
                 ),
                 coords=dict(
                     x=x,
@@ -184,6 +181,8 @@ def pixpy_app(config_vars, shutter):
             ds.time.attrs['units'] = dt_epoch.strftime('milliseconds since %Y-%m-%d')
             ds.time.attrs['long_name'] = 'time'
             ds.time.attrs['standard_name'] = 'time'
+
+            # todo: set time fill value?
 
             ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'),
                          encoding={
