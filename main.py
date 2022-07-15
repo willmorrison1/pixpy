@@ -87,7 +87,6 @@ def pixpy_app(config_vars, shutter):
     sample_interval_s = ssched.sample_interval.total_seconds()
     print(f'sample_interval_s {sample_interval_s}')
     file_name = get_file_name(ssched, config_vars['sn'])
-    # todo: change to just one 4D array with x, y, time, variable
     image_timeseries = preallocate_image_timeseries(
         height, width, sample_timesteps_remaining)
     meta_timeseries = preallocate_meta_timeseries(sample_timesteps_remaining)
