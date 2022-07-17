@@ -181,8 +181,6 @@ def pixpy_app(config_vars, shutter):
             ds.time.attrs['long_name'] = 'time'
             ds.time.attrs['standard_name'] = 'time'
 
-            # todo: set time fill value?
-
             ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'),
                          encoding={
                               'time': {'zlib': True, "complevel": 5, '_FillValue': -999},
