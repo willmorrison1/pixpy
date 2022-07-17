@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from os import path
 from pathlib import Path
 from gpiozero import CPUTemperature
-
+import config
 # todos / limitations
 # async image capture, processing and file i/o
 # template the variables to reduce boilerplate code
@@ -27,15 +27,6 @@ def imager_config_vars(config_file):
         'sn': sn_config,
         }
 
-def schedule_config_vars(config_file):
-    tree = ET.parse(config_file)
-    return {
-        'file_interval': tree.getroot().find('file_interval').text,
-        'sample_interval': tree.getroot().find('sample_interval').text,
-        'sample_repetition': tree.getroot().find('sample_repetition').text,
-        'output_directory': tree.getroot().find('output_directory').text,
-        }
-    
 
 def get_file_name(ssched, sn):
     file_end_raw = ssched.current_file_time_end()
@@ -89,7 +80,7 @@ def app_setup():
 
 
 def pixpy_app(config_vars, shutter):
-    schedule_config = schedule_config_vars(args.schedule_config_file)
+    schedule_config = config.read_schedule_config(args.schedule_config_file)
     Path(schedule_config['output_directory']).mkdir(parents=True, exist_ok=True)
     ssched = pixpy.SnapshotSchedule(
         file_interval=timedelta(seconds=schedule_config['file_interval']),

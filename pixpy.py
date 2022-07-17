@@ -22,13 +22,13 @@ class SnapshotScheduleParameters:
     file_interval: timedelta = timedelta(seconds=300)
     sample_interval: timedelta = timedelta(seconds=5)
     sample_repetition: timedelta = timedelta(seconds=60)
-
-    if sample_repetition <= sample_interval:
-        raise ValueError('sample_repetition <= sample_interval')
-    if file_interval <= sample_interval:
-        raise ValueError('file_interval <= sample_interval')
-    if file_interval <= sample_repetition:
-        raise ValueError("file_interval <= sample_repetition")
+    def __post_init__(self):
+        if self.sample_repetition <= self.sample_interval:
+            raise ValueError('sample_repetition <= sample_interval')
+        if self.file_interval <= self.sample_interval:
+            raise ValueError('file_interval <= sample_interval')
+        if self.file_interval <= self.sample_repetition:
+            raise ValueError("file_interval <= sample_repetition")
 
 
 class SnapshotSchedule(SnapshotScheduleParameters):
