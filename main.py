@@ -9,6 +9,13 @@ from os import path
 from pathlib import Path
 from gpiozero import CPUTemperature
 
+# todos / limitations
+# async image capture, processing and file i/o
+# template the variables to reduce boilerplate code
+# proper logging
+# statistics for meta data (not just end of interval)
+# check terminology - easy to understand? args.sample_repetition
+
 shutter_delay = 0.3  # assumed
 
 def get_config_vars(config_file):
