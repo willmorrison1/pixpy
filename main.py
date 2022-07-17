@@ -18,7 +18,7 @@ from gpiozero import CPUTemperature
 
 shutter_delay = 0.3  # assumed
 
-def get_config_vars(config_file):
+def imager_config_vars(config_file):
     tree = ET.parse(config_file)
     fps_config = int(float(tree.getroot().find('framerate').text))
     sn_config = int(float(tree.getroot().find('serial').text))
@@ -27,22 +27,15 @@ def get_config_vars(config_file):
         'sn': sn_config,
         }
 
-
-def app_setup():
-    Path(args.output_directory).mkdir(parents=True, exist_ok=True)
-    shutter = pixpy.Shutter()
-    config_vars = get_config_vars(args.config_file)
-    pixpy.usb_init_retry(args.config_file)
-    sn = pixpy.get_serial()
-    if sn == 0:
-        raise ValueError("Invalid serial number")
-    if config_vars['sn'] != sn:
-        raise ValueError(f'Found camera {sn} but expceted {args.config_file}')
-    pixpy.set_shutter_mode(0)
-    shutter.trigger()
-    sleep(shutter_delay * 2)
-    return config_vars, shutter
-
+def schedule_config_vars(config_file):
+    tree = ET.parse(config_file)
+    return {
+        'file_interval': tree.getroot().find('file_interval').text,
+        'sample_interval': tree.getroot().find('sample_interval').text,
+        'sample_repetition': tree.getroot().find('sample_repetition').text,
+        'output_directory': tree.getroot().find('output_directory').text,
+        }
+    
 
 def get_file_name(ssched, sn):
     file_end_raw = ssched.current_file_time_end()
@@ -79,12 +72,29 @@ def preallocate_meta_timeseries(t):
             ]
         )
 
+def app_setup():
+    shutter = pixpy.Shutter()
+    config_vars = imager_config_vars(args.imager_config_file)
+    pixpy.usb_init_retry(args.imager_config_file)
+    sn = pixpy.get_serial()
+    if sn == 0:
+        raise ValueError("Invalid serial number")
+    if config_vars['sn'] != sn:
+        raise ValueError(
+            f'Found camera {sn} but expceted {args.imager_config_file}')
+    pixpy.set_shutter_mode(0)
+    shutter.trigger()
+    sleep(shutter_delay * 2)
+    return config_vars, shutter
+
 
 def pixpy_app(config_vars, shutter):
+    schedule_config = schedule_config_vars(args.schedule_config_file)
+    Path(schedule_config['output_directory']).mkdir(parents=True, exist_ok=True)
     ssched = pixpy.SnapshotSchedule(
-        file_interval=timedelta(seconds=args.file_interval),
-        sample_interval=timedelta(seconds=args.sample_interval),
-        sample_repetition=timedelta(seconds=args.sample_repetition),
+        file_interval=timedelta(seconds=schedule_config['file_interval']),
+        sample_interval=timedelta(seconds=schedule_config['sample_interval']),
+        sample_repetition=timedelta(seconds=schedule_config['sample_repetition']),
         )
     width, height = pixpy.get_thermal_image_size()
     sample_timesteps_remaining = ssched.sample_timesteps_remaining()
@@ -188,7 +198,7 @@ def pixpy_app(config_vars, shutter):
             ds.time.attrs['long_name'] = 'time'
             ds.time.attrs['standard_name'] = 'time'
 
-            ds.to_netcdf(path.join(args.output_directory, f'{file_name}.nc'),
+            ds.to_netcdf(path.join(schedule_config['output_directory'], f'{file_name}.nc'),
                          encoding={
                               'time': {'zlib': True, "complevel": 5, '_FillValue': -999},
                               't_b_median': {'zlib': True, "complevel": 5},
