@@ -9,14 +9,13 @@ from os import path
 from pathlib import Path
 from gpiozero import CPUTemperature
 import config
-# todos / limitations
+# todos / limitations:
 # async image capture, processing and file i/o
-# template the variables to reduce boilerplate code
 # proper logging
 # statistics for meta data (not just end of interval)
-# check terminology - easy to understand? args.sample_repetition
 
 shutter_delay = 0.3  # assumed
+
 
 def imager_config_vars(config_file):
     tree = ET.parse(config_file)
@@ -25,7 +24,7 @@ def imager_config_vars(config_file):
     return {
         'fps': fps_config,
         'sn': sn_config,
-        }
+    }
 
 
 def get_file_name(ssched, sn):
@@ -43,8 +42,8 @@ def preallocate_image_timeseries(x, y, t):
             ('min', np.uint16),
             ('max', np.uint16),
             ('std', np.uint16),
-            ]
-        )
+        ]
+    )
 
 
 def preallocate_meta_timeseries(t):
@@ -60,8 +59,9 @@ def preallocate_meta_timeseries(t):
             ('counterHW', np.uint32),
             ('fps', float),
             ('n_images', np.uint16),
-            ]
-        )
+        ]
+    )
+
 
 def app_setup():
     shutter = pixpy.Shutter()
@@ -81,12 +81,14 @@ def app_setup():
 
 def pixpy_app(config_vars, shutter):
     schedule_config = config.read_schedule_config(args.schedule_config_file)
-    Path(schedule_config['output_directory']).mkdir(parents=True, exist_ok=True)
+    Path(schedule_config['output_directory']).mkdir(parents=True,
+                                                    exist_ok=True)
     ssched = pixpy.SnapshotSchedule(
         file_interval=timedelta(seconds=schedule_config['file_interval']),
         sample_interval=timedelta(seconds=schedule_config['sample_interval']),
-        sample_repetition=timedelta(seconds=schedule_config['sample_repetition']),
-        )
+        sample_repetition=timedelta(
+            seconds=schedule_config['sample_repetition']),
+    )
     width, height = pixpy.get_thermal_image_size()
     sample_timesteps_remaining = ssched.sample_timesteps_remaining()
     print(dt.utcnow())
@@ -110,12 +112,13 @@ def pixpy_app(config_vars, shutter):
     print(f"sleeping for {time_until_next_interval.total_seconds()}")
     sleep(time_until_next_interval.total_seconds())
     for j in range(0, sample_timesteps_remaining):
-        dt_epoch = ssched.current_sample_start().replace(day=1, minute=0, hour=0, second=0, microsecond=0)
+        dt_epoch = ssched.current_sample_start().replace(
+            day=1, minute=0, hour=0, second=0, microsecond=0)
         dt_epoch_s = dt_epoch.timestamp()
         print(
-                f'started n_interval_timestep {j + 1} / '
-                f'{sample_timesteps_remaining} at {dt.utcnow()}'
-              )
+            f'started n_interval_timestep {j + 1} / '
+            f'{sample_timesteps_remaining} at {dt.utcnow()}'
+        )
         shutter.trigger()
         print(f'shutter triggered {shutter._triggers} times')
         sleep(shutter_delay)
@@ -134,8 +137,10 @@ def pixpy_app(config_vars, shutter):
         image_timeseries['median'][j, :, :] = np.median(images_raw, axis=0)
         image_timeseries['min'][j, :, :] = np.min(images_raw, axis=0)
         image_timeseries['max'][j, :, :] = np.max(images_raw, axis=0)
-        image_timeseries['std'][j, :, :] = (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
-        meta_timeseries['time'][j] = (interval_end_time.timestamp() - dt_epoch_s) * 1000
+        image_timeseries['std'][j, :, :] = \
+            (np.std((images_raw - 1000) / 10, axis=0) * 10) + 1000
+        meta_timeseries['time'][j] = \
+            (interval_end_time.timestamp() - dt_epoch_s) * 1000
         meta_timeseries['tbox'][j] = meta.tempBox
         meta_timeseries['tchip'][j] = meta.tempChip
         meta_timeseries['flag_state'][j] = meta.flagState
@@ -149,7 +154,7 @@ def pixpy_app(config_vars, shutter):
             current_time = dt.utcnow()
             wait_time_until_next_interval_s = (
                 next_interval_time - current_time
-                ).total_seconds() - shutter_delay
+            ).total_seconds() - shutter_delay
             print(f'Next interval in: {wait_time_until_next_interval_s} s')
             if wait_time_until_next_interval_s < 0:
                 # todo: send to log file
@@ -162,50 +167,119 @@ def pixpy_app(config_vars, shutter):
             y = np.flip(np.arange(0, 120))
             ds = xr.Dataset(
                 data_vars=dict(
-                    t_b_median=(["time", "y", "x"], image_timeseries['median'], {"units": "celsius", "long_name": "brightness_temperature_median"}),
-                    t_b_min=(["time", "y", "x"], image_timeseries['min'], {"units": "celsius", "long_name": "brightness_temperature_min"}),
-                    t_b_max=(["time", "y", "x"], image_timeseries['max'], {"units": "celsius", "long_name": "brightness_temperature_max"}),
-                    t_b_std=(["time", "y", "x"], image_timeseries['std'], {"units": "celsius", "long_name": "brightness_temperature_standard_deviation"}),
-                    t_b_snapshot=(["time", "y", "x"], image_timeseries['snapshot'], {"units": "celsius", "long_name": "brightness_temperature_snapshot"}),
-                    t_box=(["time"], meta_timeseries['tbox'], {"units": "celsius", "long_name": "temperature_camera_body"}),
-                    t_chip=(["time"], meta_timeseries['tchip'], {"units": "celsius", "long_name": "temperature_focal_plane_array_chip"}),
-                    flag_state=(["time"], meta_timeseries['flag_state'], {"long_name": "flag_status"}),
-                    counter=(["time"], meta_timeseries['counter'], {"long_name": "image_counter_from_software"}),
-                    counterHW=(["time"], meta_timeseries['counterHW'], {"long_name": "image_counter_from_hardware"}),
-                    frames=(["time"], meta_timeseries['fps'], {"units": "s-1", "long_name": "frames_per_second"}),
-                    n_images=(["time"], meta_timeseries['n_images'], {"long_name": "number_of_images_in_interval"}),
-                    t_cpu=(["time"], meta_timeseries['tpi'], {"long_name": "temperature_raspberry_pi_cpu"}),
+                    t_b_median=(
+                        ["time", "y", "x"],
+                        image_timeseries['median'],
+                        {"units": "celsius",
+                         "long_name": "brightness_temperature_median"}),
+                    t_b_min=(
+                        ["time", "y", "x"],
+                        image_timeseries['min'],
+                        {"units": "celsius",
+                         "long_name": "brightness_temperature_min"}),
+                    t_b_max=(
+                        ["time", "y", "x"],
+                        image_timeseries['max'],
+                        {"units": "celsius",
+                         "long_name": "brightness_temperature_max"}),
+                    t_b_std=(
+                        ["time", "y", "x"],
+                        image_timeseries['std'],
+                        {"units": "celsius",
+                         "long_name":
+                             "brightness_temperature_standard_deviation"}),
+                    t_b_snapshot=(
+                        ["time", "y", "x"],
+                        image_timeseries['snapshot'],
+                        {"units": "celsius",
+                         "long_name": "brightness_temperature_snapshot"}),
+                    t_box=(
+                        ["time"],
+                        meta_timeseries['tbox'],
+                        {"units": "celsius",
+                         "long_name": "temperature_camera_body"}),
+                    t_chip=(
+                        ["time"],
+                        meta_timeseries['tchip'],
+                        {"units": "celsius",
+                         "long_name": "temperature_focal_plane_array_chip"}),
+                    flag_state=(
+                        ["time"],
+                        meta_timeseries['flag_state'],
+                        {"long_name": "flag_status"}),
+                    counter=(
+                        ["time"],
+                        meta_timeseries['counter'],
+                        {"long_name": "image_counter_from_software"}),
+                    counterHW=(
+                        ["time"],
+                        meta_timeseries['counterHW'],
+                        {"long_name": "image_counter_from_hardware"}),
+                    frames=(
+                        ["time"],
+                        meta_timeseries['fps'],
+                        {"units": "s-1", "long_name": "frames_per_second"}),
+                    n_images=(
+                        ["time"],
+                        meta_timeseries['n_images'],
+                        {"long_name": "number_of_images_in_interval"}),
+                    t_cpu=(
+                        ["time"],
+                        meta_timeseries['tpi'],
+                        {"long_name": "temperature_raspberry_pi_cpu"}),
                 ),
                 coords=dict(
                     x=x,
                     y=y,
                     time=meta_timeseries['time'],
                 ),
-                attrs=dict(description="pixpy", serial=config_vars['sn'], brightness_temperature_scaling="10", brightness_temperature_offset="1000"),
+                # todo: add contents of config files to netcdf.
+                attrs=dict(
+                    description="pixpy",
+                    serial=config_vars['sn'],
+                    brightness_temperature_scaling="10",
+                    brightness_temperature_offset="1000",
+                ),
             )
             ds.x.attrs['long_name'] = 'pixels_along_x_axis'
             ds.y.attrs['long_name'] = 'pixels_along_y_axis'
-            ds.time.attrs['units'] = dt_epoch.strftime('milliseconds since %Y-%m-%d')
+            ds.time.attrs['units'] = dt_epoch.strftime(
+                'milliseconds since %Y-%m-%d')
             ds.time.attrs['long_name'] = 'time'
             ds.time.attrs['standard_name'] = 'time'
 
-            ds.to_netcdf(path.join(schedule_config['output_directory'], f'{file_name}.nc'),
+            ds.to_netcdf(path.join(schedule_config['output_directory'],
+                                   f'{file_name}.nc'),
                          encoding={
-                              'time': {'zlib': True, "complevel": 5, '_FillValue': -999},
-                              't_b_median': {'zlib': True, "complevel": 5},
-                              't_b_min': {'zlib': True, "complevel": 5},
-                              't_b_max': {'zlib': True, "complevel": 5},
-                              't_b_std': {'zlib': True, "complevel": 5},
-                              't_b_snapshot': {'zlib': True, "complevel": 5},
-                              'n_images': {'zlib': True, "complevel": 5},
-                              },
-                              unlimited_dims=["time"])
+                'time': {'zlib': True, "complevel": 5, '_FillValue': -999},
+                't_b_median': {'zlib': True, "complevel": 5},
+                't_b_min': {'zlib': True, "complevel": 5},
+                't_b_max': {'zlib': True, "complevel": 5},
+                't_b_std': {'zlib': True, "complevel": 5},
+                't_b_snapshot': {'zlib': True, "complevel": 5},
+                'n_images': {'zlib': True, "complevel": 5},
+            },
+                unlimited_dims=["time"])
             if (next_sample_start_check < dt.utcnow()):
                 print("missed sample: i/o blocking")
 
 
-# todo - wrap in try catch and redo usb_init as appropriate
 if __name__ == "__main__":
-    config_vars, shutter = app_setup()
     while True:
-        pixpy_app(config_vars, shutter)
+        try:
+            config_vars, shutter = app_setup()
+        except (RuntimeError, ValueError) as e:
+            print(e)
+            sleep(5)
+        while True:
+            try:
+                pixpy_app(config_vars, shutter)
+            except (RuntimeError, ValueError) as e:
+                print(e)
+                sleep(1)
+                try:
+                    pixpy.terminate()
+                except (RuntimeError, ValueError) as e:
+                    print(e)
+                sleep(1)
+                break
