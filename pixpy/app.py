@@ -20,9 +20,13 @@ def imager_config_vars(config_file):
     tree = ET.parse(config_file)
     fps_config = int(float(tree.getroot().find('framerate').text))
     sn_config = int(float(tree.getroot().find('serial').text))
+    with open(args.imager_config_file, mode='r') as file:
+        imager_config_file_contents = file.read()
+    
     return {
         'fps': fps_config,
         'sn': sn_config,
+        'imager_config_file_contents': imager_config_file_contents 
     }
 
 
@@ -239,6 +243,7 @@ def image_capture(config_vars, shutter):
                     serial=config_vars['sn'],
                     brightness_temperature_scaling="10",
                     brightness_temperature_offset="1000",
+                    imager_config_file_contents=config_vars["imager_config_file_contents"],
                 ),
             )
             ds.x.attrs['long_name'] = 'pixels_along_x_axis'
