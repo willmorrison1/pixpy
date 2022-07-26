@@ -1,4 +1,4 @@
-from args import args
+from pixpy.args import args
 from datetime import datetime as dt, timedelta
 from time import sleep
 import xarray as xr
@@ -8,13 +8,12 @@ import xml.etree.ElementTree as ET
 from os import path
 from pathlib import Path
 from gpiozero import CPUTemperature
-import config
 # todos / limitations:
 # async image capture, processing and file i/o
 # proper logging
 # statistics for meta data (not just end of interval)
 
-shutter_delay = 0.3  # assumed
+shutter_delay = args.internal_shutter_delay
 
 
 def imager_config_vars(config_file):
@@ -79,8 +78,9 @@ def app_setup():
     return config_vars, shutter
 
 
-def pixpy_app(config_vars, shutter):
-    schedule_config = config.read_schedule_config(args.schedule_config_file)
+def image_capture(config_vars, shutter):
+    schedule_config = pixpy.config.read_schedule_config(
+        args.schedule_config_file)
     Path(schedule_config['output_directory']).mkdir(parents=True,
                                                     exist_ok=True)
     ssched = pixpy.SnapshotSchedule(
@@ -264,7 +264,7 @@ def pixpy_app(config_vars, shutter):
                 print("missed sample: i/o blocking")
 
 
-if __name__ == "__main__":
+def app():
     while True:
         try:
             config_vars, shutter = app_setup()
@@ -273,7 +273,7 @@ if __name__ == "__main__":
             sleep(5)
         while True:
             try:
-                pixpy_app(config_vars, shutter)
+                image_capture(config_vars, shutter)
             except (RuntimeError, ValueError) as e:
                 print(e)
                 sleep(1)
@@ -283,3 +283,4 @@ if __name__ == "__main__":
                     print(e)
                 sleep(1)
                 break
+

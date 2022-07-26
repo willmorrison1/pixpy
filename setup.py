@@ -16,7 +16,12 @@ setup(
         'gpiozero',
         'h5py',
     ],
-    version='0.1',
+    version='0.21',
+    entry_points={
+        'console_scripts': [
+            'pixpy_app=pixpy.app:app',
+        ]
+    },
     license='MIT',
     description='todo The description text',
     long_description='todo The long description text'

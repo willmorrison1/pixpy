@@ -14,5 +14,11 @@ parser.add_argument(
     help='The image capture schedule file (.xml)',
     required=True,
     )
-
+parser.add_argument(
+    '--internal_shutter_delay',
+    type=int,
+    help='The specified time for the internal shutter to cycle (s)',
+    required=False,
+    default=0.3
+    )
 args = parser.parse_args()
