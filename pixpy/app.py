@@ -1,4 +1,3 @@
-from pixpy.args import args
 from datetime import datetime as dt, timedelta
 from time import sleep
 import xarray as xr
@@ -8,6 +7,31 @@ import xml.etree.ElementTree as ET
 from os import path
 from pathlib import Path
 from gpiozero import CPUTemperature
+from argparse import ArgumentParser
+
+parser = ArgumentParser()
+
+parser.add_argument(
+    '--imager_config_file',
+    type=str,
+    help='The libirimager configuration file (.xml)',
+    required=True,
+    )
+parser.add_argument(
+    '--schedule_config_file',
+    type=str,
+    help='The image capture schedule file (.xml)',
+    required=True,
+    )
+parser.add_argument(
+    '--internal_shutter_delay',
+    type=int,
+    help='The specified time for the internal shutter to cycle (s)',
+    required=False,
+    default=0.3
+    )
+args = parser.parse_args()
+
 # todos / limitations:
 # async image capture, processing and file i/o
 # proper logging
