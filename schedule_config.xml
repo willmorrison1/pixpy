@@ -2,7 +2,7 @@
 
 <schedule_config>
 	<file_interval description="The time interval for one image file.">60</file_interval>
-	<sample_interval description="The time interval to capture one image aggregate.">2</sample_interval>
-	<sample_repetition description="The time interval between image samples.">5</sample_repetition>
-	<output_directory description="The directory where image files are saved.">OUT</output_directory>
+	<sample_interval description="The time interval to capture one image aggregate.">5</sample_interval>
+	<sample_repetition description="The time interval between image samples.">60</sample_repetition>
+	<output_directory description="The directory where image files are saved.">/home/pi/ircam/OUT</output_directory>
 </schedule_config>
