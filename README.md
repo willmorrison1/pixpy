@@ -6,7 +6,7 @@ Most initial bindings taken from https://github.com/siyka-au/pyoptris, but had s
 
 see install.sh for how it's done
 
-edit config files schedule_config.xml sync_config.json
+edit config file schedule_config.xml
 
 turn off automatic image capture: systemctl stop pixpy_app
 
